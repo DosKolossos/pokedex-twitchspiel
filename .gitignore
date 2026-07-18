@@ -1,0 +1,23 @@
+node_modules/
+.env
+runtime/
+logs/
+data/out/
+*.log
+*.pid
+*.tmp
+pass.txt
+upload-pokedex.txt
+winscp.log
+
+# Laufende Spieldaten
+data/
+logs/
+runtime/
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+pass.txt
+upload-pokedex.txt
