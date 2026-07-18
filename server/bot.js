@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+const fs = require("fs");
+const path = require("path");
+
 const { TokenManager } = require("./token-manager");
 const { TwitchApi } = require("./twitch-api");
 const { EventSubConnection } = require("./eventsub");
@@ -31,7 +34,11 @@ const sendDelayMs = Number(process.env.CHAT_SEND_DELAY_MS || 1100);
 const spawnGraceMs = Number(process.env.SPAWN_RESOLVE_GRACE_SECONDS || 5) * 1000;
 const raidGraceMs = Number(process.env.RAID_RESOLVE_GRACE_SECONDS || 2) * 1000;
 const autoSpawnMinutes = Number(process.env.AUTO_SPAWN_INTERVAL_MINUTES || 0);
-const autoSpawnOnlyWhenLive = String(process.env.AUTO_SPAWN_ONLY_WHEN_LIVE || "true").toLowerCase() !== "false";
+const autoSpawnOnlyWhenLive =
+  String(process.env.AUTO_SPAWN_ONLY_WHEN_LIVE || "true").toLowerCase() !== "false";
+
+const runtimeDir = path.join(__dirname, "..", "runtime");
+const controlStateFile = path.join(runtimeDir, "game-control.json");
 
 const botToken = new TokenManager({
   name: "bot",
@@ -47,10 +54,18 @@ const broadcasterToken = new TokenManager({
   accessToken: process.env.BROADCASTER_ACCESS_TOKEN,
   refreshToken: process.env.BROADCASTER_REFRESH_TOKEN,
 });
-const twitch = new TwitchApi({ clientId, botUserId, broadcasterUserId, botTokenManager: botToken });
+const twitch = new TwitchApi({
+  clientId,
+  botUserId,
+  broadcasterUserId,
+  botTokenManager: botToken,
+});
 const game = new GameAdapter();
 
 let streamLive = false;
+let gameEnabled = false;
+let manualOverride = null;
+let gameEnabledSource = "Start";
 let spawnTimer = null;
 let raidTimer = null;
 let chatSendQueue = Promise.resolve();
@@ -77,7 +92,9 @@ function getRewardMap() {
   const result = { ...defaultRewardMap };
   if (process.env.REWARD_ITEM_MAP_JSON) {
     const custom = JSON.parse(process.env.REWARD_ITEM_MAP_JSON);
-    for (const [title, item] of Object.entries(custom)) result[normalizeTitle(title)] = String(item);
+    for (const [title, item] of Object.entries(custom)) {
+      result[normalizeTitle(title)] = String(item);
+    }
   }
   return result;
 }
@@ -113,14 +130,96 @@ function sendChat(message) {
   return chatSendQueue;
 }
 
+function readControlState() {
+  try {
+    const value = JSON.parse(fs.readFileSync(controlStateFile, "utf8"));
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistControlState() {
+  fs.mkdirSync(runtimeDir, { recursive: true });
+  const tempFile = `${controlStateFile}.${process.pid}.tmp`;
+  const state = {
+    version: 1,
+    enabled: gameEnabled,
+    manualOverride,
+    streamLive,
+    source: gameEnabledSource,
+    updatedAt: Date.now(),
+  };
+  fs.writeFileSync(tempFile, JSON.stringify(state, null, 2), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  fs.renameSync(tempFile, controlStateFile);
+  try {
+    fs.chmodSync(controlStateFile, 0o600);
+  } catch {}
+}
+
+function statusText() {
+  const state = gameEnabled ? "aktiv" : "deaktiviert";
+  const stream = streamLive ? "Stream online" : "Stream offline";
+  return `Pokédexspiel: ${state} (${gameEnabledSource}; ${stream}).`;
+}
+
+async function setGameEnabled(nextEnabled, options = {}) {
+  const next = Boolean(nextEnabled);
+  const source = String(options.source || "System");
+  const override =
+    typeof options.manualOverride === "boolean" ? options.manualOverride : null;
+  const changed = gameEnabled !== next;
+
+  gameEnabled = next;
+  manualOverride = override;
+  gameEnabledSource = source;
+  persistControlState();
+
+  if (gameEnabled) {
+    scheduleSpawnResolve();
+    scheduleRaidResolve();
+  }
+
+  console.log(
+    `[game] ${gameEnabled ? "aktiviert" : "deaktiviert"} durch ${gameEnabledSource}${changed ? "" : " (unverändert)"}`
+  );
+  return changed;
+}
+
+function initializeGameControl() {
+  const saved = readControlState();
+
+  if (
+    saved.streamLive === streamLive &&
+    typeof saved.manualOverride === "boolean"
+  ) {
+    manualOverride = saved.manualOverride;
+    gameEnabled = saved.manualOverride;
+    gameEnabledSource = String(saved.source || "gespeicherte Mod-Einstellung");
+  } else {
+    manualOverride = null;
+    gameEnabled = streamLive;
+    gameEnabledSource = streamLive ? "Stream bereits online" : "Stream offline";
+  }
+
+  persistControlState();
+  console.log(`[game] Startstatus: ${statusText()}`);
+}
+
 function scheduleSpawnResolve() {
   if (spawnTimer) clearTimeout(spawnTimer);
   const state = game.getSpawnState();
   if (!state?.active || !state?.pokemon) return;
-  const delay = Math.max(0, Number(state.endsAt || 0) + spawnGraceMs - Date.now());
+  const delay = Math.max(
+    0,
+    Number(state.endsAt || 0) + spawnGraceMs - Date.now()
+  );
   spawnTimer = setTimeout(async () => {
     const output = await game.command("resolve", {}, "");
-    if (output.message) await sendChat(output.message);
+    if (gameEnabled && output.message) await sendChat(output.message);
     spawnTimer = null;
   }, delay);
   console.log(`[timer] Spawn-Auflösung in ${Math.round(delay / 1000)}s`);
@@ -130,16 +229,20 @@ function scheduleRaidResolve() {
   if (raidTimer) clearTimeout(raidTimer);
   const state = game.getRaidState();
   if (!state?.current) return;
-  const delay = Math.max(0, Number(state.current.joinEndsAt || 0) + raidGraceMs - Date.now());
+  const delay = Math.max(
+    0,
+    Number(state.current.joinEndsAt || 0) + raidGraceMs - Date.now()
+  );
   raidTimer = setTimeout(async () => {
     const output = await game.command("raidresolve", {}, "");
-    if (output.message) await sendChat(output.message);
+    if (gameEnabled && output.message) await sendChat(output.message);
     raidTimer = null;
   }, delay);
   console.log(`[timer] Raid-Auflösung in ${Math.round(delay / 1000)}s`);
 }
 
 async function attemptAutoSpawn() {
+  if (!gameEnabled) return;
   if (autoSpawnOnlyWhenLive && !streamLive) return;
   const output = await game.command("spawn", {}, "");
   if (output.result?.ok && output.message) {
@@ -151,14 +254,57 @@ async function attemptAutoSpawn() {
 function isAdmin(event) {
   if (String(event.chatter_user_id) === broadcasterUserId) return true;
   const badges = Array.isArray(event.badges) ? event.badges : [];
-  return badges.some((badge) => ["broadcaster", "moderator"].includes(String(badge.set_id || badge.id || "").toLowerCase()));
+  return badges.some((badge) =>
+    ["broadcaster", "moderator"].includes(
+      String(badge.set_id || badge.id || "").toLowerCase()
+    )
+  );
 }
 
 function parseCommand(message) {
   const trimmed = String(message || "").trim();
   if (!trimmed.startsWith("!")) return null;
   const [head, ...parts] = trimmed.split(/\s+/);
-  return { name: head.slice(1).toLowerCase(), args: parts.join(" "), raw: trimmed };
+  return {
+    name: head.slice(1).toLowerCase(),
+    args: parts.join(" "),
+    raw: trimmed,
+  };
+}
+
+function controlAction(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["on", "an", "start"].includes(normalized)) return "on";
+  if (["off", "aus", "stop"].includes(normalized)) return "off";
+  if (["status", "state"].includes(normalized)) return "status";
+  return null;
+}
+
+async function handleControlCommand(event, parsed, user) {
+  if (parsed.name !== "pokedex") return false;
+
+  const action = controlAction(parsed.args);
+  if (!action) return false;
+
+  if (action === "status") {
+    await sendChat(`@${user.userName} ${statusText()}`);
+    return true;
+  }
+
+  if (!isAdmin(event)) {
+    await sendChat(`@${user.userName} Nur Mods können das Pokédexspiel an- oder ausschalten.`);
+    return true;
+  }
+
+  const enable = action === "on";
+  await setGameEnabled(enable, {
+    source: `Mod ${user.userName}`,
+    manualOverride: enable,
+  });
+  await sendChat(
+    `@${user.userName} Das Pokédexspiel ist jetzt ${enable ? "aktiv" : "deaktiviert"}.`
+  );
+  return true;
 }
 
 const aliases = new Map([
@@ -184,12 +330,18 @@ const aliases = new Map([
 async function handleChatEvent(event) {
   const user = {
     userId: String(event.chatter_user_id || ""),
-    userName: String(event.chatter_user_name || event.chatter_user_login || "User"),
+    userName: String(
+      event.chatter_user_name || event.chatter_user_login || "User"
+    ),
     message: String(event.message?.text || ""),
   };
   if (!user.userId || user.userId === botUserId) return;
 
   const parsed = parseCommand(user.message);
+  if (parsed && (await handleControlCommand(event, parsed, user))) return;
+
+  if (!gameEnabled) return;
+
   if (!parsed) {
     await game.chatXp(user);
     return;
@@ -214,6 +366,13 @@ async function handleChatEvent(event) {
 }
 
 async function handleReward(event) {
+  if (!gameEnabled) {
+    console.log(
+      `[reward] ignoriert, weil das Spiel deaktiviert ist: ${event.reward?.title || "?"}`
+    );
+    return;
+  }
+
   const title = normalizeTitle(event.reward?.title);
   const itemId = rewardMap[title];
   if (!itemId) {
@@ -229,19 +388,35 @@ async function handleReward(event) {
 }
 
 async function onChatNotification(type, event) {
-  if (type === "channel.chat.message") await handleChatEvent(event);
+  if (type === "channel.chat.message") {
+    await handleChatEvent(event);
+    return;
+  }
+
   if (type === "stream.online") {
     streamLive = true;
     console.log("[stream] online");
+    await setGameEnabled(true, {
+      source: "Streamstart",
+      manualOverride: null,
+    });
+    return;
   }
+
   if (type === "stream.offline") {
     streamLive = false;
     console.log("[stream] offline");
+    await setGameEnabled(false, {
+      source: "Streamende",
+      manualOverride: null,
+    });
   }
 }
 
 async function onRewardNotification(type, event) {
-  if (type === "channel.channel_points_custom_reward_redemption.add") await handleReward(event);
+  if (type === "channel.channel_points_custom_reward_redemption.add") {
+    await handleReward(event);
+  }
 }
 
 const chatEventSub = new EventSubConnection({
@@ -251,10 +426,19 @@ const chatEventSub = new EventSubConnection({
   subscriptions: [
     {
       type: "channel.chat.message",
-      condition: { broadcaster_user_id: broadcasterUserId, user_id: botUserId },
+      condition: {
+        broadcaster_user_id: broadcasterUserId,
+        user_id: botUserId,
+      },
     },
-    { type: "stream.online", condition: { broadcaster_user_id: broadcasterUserId } },
-    { type: "stream.offline", condition: { broadcaster_user_id: broadcasterUserId } },
+    {
+      type: "stream.online",
+      condition: { broadcaster_user_id: broadcasterUserId },
+    },
+    {
+      type: "stream.offline",
+      condition: { broadcaster_user_id: broadcasterUserId },
+    },
   ],
   onNotification: onChatNotification,
 });
@@ -273,15 +457,29 @@ const rewardEventSub = new EventSubConnection({
 });
 
 async function main() {
-  const [botAuth, broadcasterAuth] = await Promise.all([botToken.validate(), broadcasterToken.validate()]);
+  const [botAuth, broadcasterAuth] = await Promise.all([
+    botToken.validate(),
+    broadcasterToken.validate(),
+  ]);
   console.log(`[auth] Bot: ${botAuth.login} (${botAuth.user_id})`);
-  console.log(`[auth] Kanal: ${broadcasterAuth.login} (${broadcasterAuth.user_id})`);
-  if (String(botAuth.user_id) !== botUserId) throw new Error("BOT_USER_ID passt nicht zum Bot-Token");
-  if (String(broadcasterAuth.user_id) !== broadcasterUserId) throw new Error("BROADCASTER_USER_ID passt nicht zum Broadcaster-Token");
+  console.log(
+    `[auth] Kanal: ${broadcasterAuth.login} (${broadcasterAuth.user_id})`
+  );
+  if (String(botAuth.user_id) !== botUserId) {
+    throw new Error("BOT_USER_ID passt nicht zum Bot-Token");
+  }
+  if (String(broadcasterAuth.user_id) !== broadcasterUserId) {
+    throw new Error(
+      "BROADCASTER_USER_ID passt nicht zum Broadcaster-Token"
+    );
+  }
 
   streamLive = await twitch.isStreamLive().catch(() => false);
   console.log(`[stream] Startstatus: ${streamLive ? "online" : "offline"}`);
+  initializeGameControl();
 
+  // Bereits laufende Spawns/Raids werden auch im deaktivierten Zustand
+  // zum vorgesehenen Zeitpunkt still aufgelöst, damit kein Zustand hängen bleibt.
   scheduleSpawnResolve();
   scheduleRaidResolve();
 
@@ -289,11 +487,25 @@ async function main() {
   await rewardEventSub.start();
 
   if (autoSpawnMinutes > 0) {
-    setInterval(() => attemptAutoSpawn().catch((error) => console.error("[auto-spawn]", error)), autoSpawnMinutes * 60 * 1000);
-    console.log(`[auto-spawn] alle ${autoSpawnMinutes} Minuten${autoSpawnOnlyWhenLive ? " (nur live)" : ""}`);
+    setInterval(
+      () =>
+        attemptAutoSpawn().catch((error) =>
+          console.error("[auto-spawn]", error)
+        ),
+      autoSpawnMinutes * 60 * 1000
+    );
+    console.log(
+      `[auto-spawn] alle ${autoSpawnMinutes} Minuten${autoSpawnOnlyWhenLive ? " (nur live)" : ""}`
+    );
   } else {
-    console.log("[auto-spawn] deaktiviert, bis der bisherige Timer bestätigt ist");
+    console.log(
+      "[auto-spawn] deaktiviert, bis der bisherige Timer bestätigt ist"
+    );
   }
+
+  console.log(
+    "[game] Steuerung: !pokedex on | !pokedex off | !pokedex status (an/aus/start/stop ebenfalls möglich)"
+  );
 }
 
 function shutdown(signal) {
@@ -304,9 +516,12 @@ function shutdown(signal) {
   if (raidTimer) clearTimeout(raidTimer);
   setTimeout(() => process.exit(0), 500);
 }
+
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("unhandledRejection", (error) => console.error("[bot] Unhandled rejection:", error));
+process.on("unhandledRejection", (error) =>
+  console.error("[bot] Unhandled rejection:", error)
+);
 process.on("uncaughtException", (error) => {
   console.error("[bot] Uncaught exception:", error);
   process.exit(1);
