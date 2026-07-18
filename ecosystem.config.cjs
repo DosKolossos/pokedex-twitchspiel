@@ -27,6 +27,20 @@ module.exports = {
       autorestart: true,
       watch: false,
       time: true
+    },
+    {
+      name: "pokedex-web-sync",
+      cwd: "/opt/pokedex",
+      script: "server/web-sync.js",
+      interpreter: "/root/.nvm/versions/node/v22.23.1/bin/node",
+      env: {
+        NODE_ENV: "production"
+      },
+      max_memory_restart: "150M",
+      restart_delay: 10000,
+      autorestart: true,
+      watch: false,
+      time: true
     }
   ]
 };
