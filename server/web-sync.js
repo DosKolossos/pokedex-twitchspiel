@@ -182,7 +182,6 @@ async function main() {
   const timer = setInterval(() => {
     syncOnce().catch((error) => console.error(`[web-sync] Fehler: ${error.message || error}`));
   }, intervalSeconds * 1000);
-  timer.unref();
 
   const shutdown = (signal) => {
     stopped = true;
