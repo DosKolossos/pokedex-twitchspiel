@@ -153,7 +153,21 @@ function showEmptySlotMenu(button) {
   menu.className = "slot-context-menu";
   menu.setAttribute("role", "menu");
   menu.innerHTML = `<button type="button" role="menuitem" data-add-pokemon><span aria-hidden="true">＋</span>Pokémon hinzufügen</button>`;
-  button.append(menu);
+  document.body.append(menu);
+  menu.anchorButton = button;
+
+  const buttonRect = button.getBoundingClientRect();
+  const navigationTop = phone.querySelector(".tabs")?.getBoundingClientRect().top;
+  const lowerBoundary = Number.isFinite(navigationTop) ? navigationTop - 8 : window.innerHeight - 8;
+  const menuHeight = menu.offsetHeight;
+  const fitsBelow = buttonRect.bottom + 5 + menuHeight <= lowerBoundary;
+  const top = fitsBelow
+    ? buttonRect.bottom + 5
+    : Math.max(8, buttonRect.top - menuHeight - 5);
+
+  menu.style.left = `${buttonRect.left + 12}px`;
+  menu.style.top = `${top}px`;
+  menu.style.width = `${Math.max(0, buttonRect.width - 24)}px`;
   emptySlotMenu = menu;
   menu.querySelector("[data-add-pokemon]").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -258,7 +272,7 @@ function bindPcActions() {
   }));
   view.querySelectorAll("[data-empty-slot]").forEach((button) => button.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (emptySlotMenu && emptySlotMenu.parentElement === button) {
+    if (emptySlotMenu?.anchorButton === button) {
       closeEmptySlotMenu();
       return;
     }
@@ -445,5 +459,7 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && emptySlotMenu) closeEmptySlotMenu();
 });
+window.addEventListener("resize", closeEmptySlotMenu);
+window.addEventListener("scroll", closeEmptySlotMenu, true);
 load();
 setInterval(load, 15000000);
