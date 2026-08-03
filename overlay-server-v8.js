@@ -10,6 +10,7 @@ const app = express();
 const BASE = __dirname;
 const OVERLAY_DIR = path.join(BASE, "overlay");
 const WIDGET_DIR = path.join(BASE, "widget");
+const PRIVACY_FILE = path.join(BASE, "privacy", "index.html");
 const SPRITES_DIR = path.join(BASE, "sprites");
 const HOST = String(process.env.OVERLAY_HOST || "127.0.0.1");
 const PORT = Number(process.env.OVERLAY_PORT || 3010);
@@ -35,6 +36,12 @@ function readJsonSafe(filePath, fallback) {
 installWidgetApi(app, { paths, readJsonSafe, setNoCache });
 
 app.disable("x-powered-by");
+
+app.get(["/datenschutz", "/datenschutz/"], (_req, res) => {
+  setNoCache(res);
+  res.sendFile(PRIVACY_FILE);
+});
+
 app.use(express.static(OVERLAY_DIR, { etag: false, maxAge: 0 }));
 if (fs.existsSync(WIDGET_DIR)) {
   app.use("/widget", express.static(WIDGET_DIR, { etag: false, maxAge: 0 }));
