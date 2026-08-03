@@ -16,12 +16,15 @@
       </button>
     </header>
     <section id="view" class="view" aria-live="polite"></section>
+    <section id="topOverlay" class="top-overlay" aria-live="polite" hidden>
+      <div id="topOverlayContent" class="top-overlay-content"></div>
+    </section>
     <nav class="tabs" aria-label="Hauptmenü">
-      <button data-page="team"><span>👥</span><small>Team</small></button>
-      <button data-page="items"><span>🎒</span><small>Items</small></button>
-      <button class="home active" data-page="dex"><span>♥</span><small>Dex</small></button>
+      <button data-page="dex"><span>◓</span><small>PokéDex</small></button>
+      <button data-page="pc"><span>▣</span><small>PC</small></button>
+      <button class="home active" data-page="home"><span aria-hidden="true">⌂</span><small>Home</small></button>
       <button data-page="multi"><span>⚔</span><small>Multi</small></button>
-      <button data-page="ranks"><span>🏆</span><small>Ranks</small></button>
+      <button data-page="history"><span>↺</span><small>Historie</small></button>
     </nav>
   </main>
   <script src="app.js"></script>

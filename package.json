@@ -8,8 +8,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "bot": "node server/bot.js",
-    "overlay": "node overlay-server.js",
+    "bot": "node server/bot-v8.js",
+    "overlay": "node overlay-server-v8.js",
     "check": "node scripts/check-project.js",
     "verify-data": "node scripts/verify-data.js"
   },
