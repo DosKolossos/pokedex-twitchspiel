@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PokéDex Widget</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="phone">
+    <header class="topbar">
+      <button class="icon-button" id="helpButton" aria-label="Hilfe">?</button>
+      <div class="trainer"><span class="eyebrow">TRAINER</span><strong id="trainerName">PokéDex</strong></div>
+      <button class="icon-button notification" id="notificationButton" aria-label="Benachrichtigungen">
+        <span>🔔</span><b id="notificationBadge" hidden>0</b>
+      </button>
+    </header>
+    <section id="view" class="view" aria-live="polite"></section>
+    <nav class="tabs" aria-label="Hauptmenü">
+      <button data-page="team"><span>👥</span><small>Team</small></button>
+      <button data-page="items"><span>🎒</span><small>Items</small></button>
+      <button class="home active" data-page="dex"><span>♥</span><small>Dex</small></button>
+      <button data-page="multi"><span>⚔</span><small>Multi</small></button>
+      <button data-page="ranks"><span>🏆</span><small>Ranks</small></button>
+    </nav>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

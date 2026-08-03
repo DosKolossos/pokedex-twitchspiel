@@ -1,0 +1,73 @@
+name: PokéDex sicher auf Hetzner deployen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pokedex-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: SSH vorbereiten
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/pokedex_deploy
+          chmod 600 ~/.ssh/pokedex_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Auf Hetzner aktualisieren
+        shell: bash
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/pokedex_deploy \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$HETZNER_USER@$HETZNER_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/pokedex
+
+          test -f .env
+          test -d data
+          test -d .git
+
+          git fetch origin main
+
+          # Der produktive Token-Startfix entstand einmal direkt auf dem
+          # Server. Ist server/bot.js bereits bytegleich mit dem neuen Stand,
+          # wird nur der Git-Arbeitsbaum bereinigt. Jede andere lokale Änderung
+          # stoppt das Deployment, statt sie zu überschreiben.
+          if ! git diff --quiet -- server/bot.js; then
+            if git diff --quiet origin/main -- server/bot.js; then
+              git restore --source=origin/main --worktree -- server/bot.js
+            else
+              echo "server/bot.js enthält abweichende lokale Änderungen; Deployment abgebrochen."
+              exit 1
+            fi
+          fi
+
+          git merge --ff-only origin/main
+
+          NPM=/root/.nvm/versions/node/v22.23.1/bin/npm
+          PM2=/root/.nvm/versions/node/v22.23.1/bin/pm2
+
+          "$NPM" ci --omit=dev
+          "$NPM" run check
+          HOME=/root "$PM2" startOrReload ecosystem.config.cjs --update-env
+          HOME=/root "$PM2" save
+          HOME=/root "$PM2" status
+          REMOTE

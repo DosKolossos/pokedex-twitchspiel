@@ -457,6 +457,10 @@ const rewardEventSub = new EventSubConnection({
 });
 
 async function main() {
+  await Promise.all([
+    botToken.getAccessToken(),
+    broadcasterToken.getAccessToken(),
+  ]);
   const [botAuth, broadcasterAuth] = await Promise.all([
     botToken.validate(),
     broadcasterToken.validate(),
