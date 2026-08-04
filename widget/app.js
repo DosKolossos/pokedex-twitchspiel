@@ -5,7 +5,8 @@ const topOverlayContent = document.querySelector("#topOverlayContent");
 const helpButton = document.querySelector("#helpButton");
 const notificationButton = document.querySelector("#notificationButton");
 const params = new URLSearchParams(location.search);
-const userId = params.get("userId") || "";
+const developmentUserId = params.get("userId") || "";
+let twitchAuthToken = "";
 phone.dataset.popout = params.get("popout") === "true";
 
 function getApiBaseUrl() {
@@ -22,7 +23,8 @@ function getApiBaseUrl() {
     return "https://overlay.schiggygang.de";
   }
 
-  return "";
+  if (location.hostname === "overlay.schiggygang.de") return "";
+  return "https://overlay.schiggygang.de";
 }
 
 const apiBaseUrl = getApiBaseUrl();
@@ -66,7 +68,7 @@ function activePartner() {
 }
 
 function monLevel(mon) {
-  return state?.player?.progress?.[`${userId}:${Number(mon?.caughtAt)}`]?.level || mon?.level || 1;
+  return state?.player?.progress?.[`${state?.player?.id || developmentUserId}:${Number(mon?.caughtAt)}`]?.level || mon?.level || 1;
 }
 
 function xpToNextLevel(level) {
@@ -195,7 +197,7 @@ function showPcPokemonPicker(slotIndex) {
 
 function reportMarkup(mon) {
   const level = monLevel(mon);
-  const progress = state.player.progress?.[`${userId}:${Number(mon.caughtAt)}`] || {};
+  const progress = state.player.progress?.[`${state.player.id}:${Number(mon.caughtAt)}`] || {};
   const currentXp = level >= 100 ? 0 : Math.max(0, Number(progress.xp ?? mon.xp ?? 0));
   const requiredXp = xpToNextLevel(level);
   const xpPercent = level >= 100 ? 100 : Math.min(100, Math.round(currentXp / requiredXp * 100));
@@ -212,7 +214,7 @@ function reportMarkup(mon) {
 }
 
 async function postAction(action, caughtAt, extra = {}) {
-  const response = await fetch(`${apiBaseUrl}/api/widget/action`, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ userId, action, caughtAt, ...extra }) });
+  const response = await fetch(`${apiBaseUrl}/api/widget/action${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method:"POST", headers:apiHeaders(true), body:JSON.stringify({ action, caughtAt, ...extra }) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.ok) throw new Error(({ team_full:"Dein Team ist voll.", slot_occupied:"Dieser Teamslot ist inzwischen belegt. Bitte wähle einen anderen.", already_in_team:"Dieses Pokémon ist bereits im Team.", remove_from_team_first:"Lege das Pokémon zuerst auf dem PC ab.", not_enough_items:"Du hast nicht genug davon.", item_not_supported_yet:"Entwicklungssteine folgen mit dem Evolutions-Dialog." })[result.error] || result.error || "Aktion fehlgeschlagen");
   await load();
@@ -418,15 +420,19 @@ function render() {
 }
 
 async function load() {
-  if (!userId) { view.innerHTML = `<div class="empty"><strong>Entwicklungsansicht</strong><p>Öffne das Widget mit <code>?userId=TWITCH_ID</code>.</p></div>`; return; }
+  if (!twitchAuthToken && !developmentUserId) {
+    view.innerHTML = `<div class="empty"><strong>Verbindung zu Twitch …</strong><p>Der Pokédex wartet auf die sichere Anmeldung.</p></div>`;
+    return;
+  }
   try {
     const response = await fetch(
-      `${apiBaseUrl}/api/widget/player?userId=${encodeURIComponent(userId)}`,
-      { cache:"no-store" }
+      `${apiBaseUrl}/api/widget/player${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`,
+      { cache:"no-store", headers:apiHeaders() }
     );
     state = await response.json();
+    if (state.error === "identity_link_required") return showIdentityLink();
     if (!response.ok || !state.ok) throw new Error(state.error || "Laden fehlgeschlagen");
-    const metaResponse = await fetch(`${apiBaseUrl}/api/widget/meta?userId=${encodeURIComponent(userId)}`, { cache:"no-store" });
+    const metaResponse = await fetch(`${apiBaseUrl}/api/widget/meta${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { cache:"no-store", headers:apiHeaders() });
     if (metaResponse.ok) {
       const meta = await metaResponse.json();
       state.ranks = meta.ranks || {};
@@ -445,6 +451,30 @@ async function load() {
   }
 }
 
+function apiHeaders(withJson = false) {
+  const headers = {};
+  if (withJson) headers["Content-Type"] = "application/json";
+  if (twitchAuthToken) headers.Authorization = `Bearer ${twitchAuthToken}`;
+  return headers;
+}
+
+function showIdentityLink() {
+  state = null;
+  view.innerHTML = `<div class="empty identity-card"><strong>Dein persönlicher Pokédex</strong><p>Verknüpfe einmalig deine Twitch-Identität, damit wir deine im Chat gefangenen Pokémon sicher zuordnen können.</p><button type="button" class="identity-button" id="identityButton">Mit Twitch verknüpfen</button><small>Du kannst die Freigabe jederzeit in Twitch widerrufen.</small></div>`;
+  document.querySelector("#identityButton")?.addEventListener("click", () => window.Twitch?.ext?.actions?.requestIdShare());
+}
+
+if (developmentUserId) {
+  load();
+} else if (window.Twitch?.ext) {
+  window.Twitch.ext.onAuthorized((auth) => {
+    twitchAuthToken = String(auth?.token || "");
+    load();
+  });
+} else {
+  view.innerHTML = `<div class="empty"><strong>Twitch-Panel erforderlich</strong><p>Öffne den Pokédex als Extension auf Twitch.</p></div>`;
+}
+
 helpButton.setAttribute("aria-expanded", "false");
 helpButton.setAttribute("aria-controls", "topOverlay");
 notificationButton.setAttribute("aria-expanded", "false");
@@ -461,5 +491,4 @@ document.addEventListener("keydown", (event) => {
 });
 window.addEventListener("resize", closeEmptySlotMenu);
 window.addEventListener("scroll", closeEmptySlotMenu, true);
-load();
 setInterval(load, 15000000);

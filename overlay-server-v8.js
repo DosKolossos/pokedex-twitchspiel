@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const paths = require("./lib/paths");
 const { installWidgetApi } = require("./lib/widgetApi");
+const { requireExtensionIdentity, widgetCors } = require("./lib/twitchExtensionAuth");
 
 const app = express();
 const BASE = __dirname;
@@ -33,9 +34,9 @@ function readJsonSafe(filePath, fallback) {
   }
 }
 
-installWidgetApi(app, { paths, readJsonSafe, setNoCache });
-
 app.disable("x-powered-by");
+app.use("/api/widget", express.json({ limit: "32kb" }), widgetCors, requireExtensionIdentity);
+installWidgetApi(app, { paths, readJsonSafe, setNoCache });
 
 app.get(["/datenschutz", "/datenschutz/"], (_req, res) => {
   setNoCache(res);
@@ -59,14 +60,10 @@ app.get("/api/raid", (_req, res) => {
   res.json({ ...readJsonSafe(paths.RAID_STATE_JSON, { current: null }), serverNow: Date.now() });
 });
 
-// Lokale Entwicklungsroute für das Twitch-Widget. Vor einer öffentlichen
-// Freigabe wird userId durch die serverseitig geprüfte Twitch-Extension-
-// Identität ersetzt.
 app.get("/api/widget/player", (req, res) => {
   setNoCache(res);
 
-  const userId = String(req.query.userId || "").trim();
-  if (!userId) return res.status(400).json({ ok: false, error: "userId_missing" });
+  const userId = req.twitchUserId;
 
   const pokedex = readJsonSafe(paths.POKEDEX_JSON, { users: {} });
   const profiles = readJsonSafe(paths.PROFILES_JSON, { users: {} });

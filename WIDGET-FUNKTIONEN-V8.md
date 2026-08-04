@@ -15,4 +15,4 @@
 - Entwicklungssteine benötigen noch den gezielten Evolutionsdialog für ein frei gewähltes Pokémon.
 - Attacken und Statuswerte erscheinen, sobald diese Daten im Kampfmodell gespeichert werden.
 - PvP, Kampfanimation, Tauschanimation und eine zeitlich gesteuerte Overlay-Aktivitätsqueue sind der nächste Funktionsblock. Die bestehende Bot-Befehlsqueue serialisiert bereits Serverbefehle, ersetzt aber noch keine Animationsqueue.
-- Vor öffentlicher Nutzung müssen schreibende Widget-Aktionen eine serverseitig verifizierte Twitch-Identität verwenden; `userId` als URL-Parameter ist nur für die Entwicklungsphase gedacht.
+- Lesende und schreibende Widget-Aktionen verwenden im Twitch-Panel eine serverseitig verifizierte Twitch-Identität; `userId` als URL-Parameter ist nur im ausdrücklich aktivierten Entwicklungsmodus verfügbar.

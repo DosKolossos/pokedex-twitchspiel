@@ -18,7 +18,10 @@ http://127.0.0.1:3010/widget/?userId=TWITCH_ID
 
 ## Sicherheitsgrenze
 
-`/api/widget/player?userId=...` ist zunächst nur eine Entwicklungsroute. Sie darf nicht öffentlich freigegeben werden, bevor der Server die Twitch-Extension-JWT prüft und die Spieler-ID daraus ableitet. Schreibaktionen für Team, Items, Tausch und Kämpfe werden erst danach ergänzt.
+`?userId=...` funktioniert nur noch, wenn auf dem Server ausdrücklich
+`WIDGET_DEV_AUTH=true` gesetzt ist. Im Twitch-Panel sendet der Extension Helper
+stattdessen ein JWT; der Server prüft es und leitet die Spieler-ID ausschließlich
+aus dessen `user_id`-Claim ab.
 
 ## GitHub-Deployment
 
