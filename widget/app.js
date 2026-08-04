@@ -79,6 +79,18 @@ function availableEvolution(mon) {
   ) || null;
 }
 
+function evolutionReadyMarkup(mon) {
+  return availableEvolution(mon)
+    ? `<span class="evolution-ready-dot" title="Entwicklung verfügbar" aria-label="Entwicklung verfügbar"></span>`
+    : "";
+}
+
+function isTeamPokemon(mon) {
+  return (state?.player?.party?.slots || []).some(
+    (slot) => slot && Number(slot.caughtAt) === Number(mon?.caughtAt)
+  );
+}
+
 function xpToNextLevel(level) {
   const normalizedLevel = Math.max(1, Number(level) || 1);
   return normalizedLevel >= 100 ? 0 : 40 + normalizedLevel * 20;
@@ -207,8 +219,7 @@ function showEmptySlotMenu(button) {
 }
 
 function showPcPokemonPicker(slotIndex) {
-  const teamKeys = new Set((state.player.party?.slots || []).filter(Boolean).map(monKey));
-  const available = (state.player.caught || []).filter((mon) => !teamKeys.has(monKey(mon)));
+  const available = (state.player.caught || []).filter((mon) => !isTeamPokemon(mon));
   const layer = dialog(`<button class="dialog-close" data-dialog-close aria-label="PC schließen">×</button><div class="pc-picker-head"><small>PC · LAGER</small><h2>Pokémon hinzufügen</h2><p>Wähle ein Pokémon für Slot ${slotIndex + 1}.</p></div><div class="pc-picker-grid">${available.map((mon) => `<button type="button" class="pc-picker-mon" data-pc-pokemon="${Number(mon.caughtAt)}">${pokemonImage(mon, "pc-picker-sprite")}<span><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${escapeHtml(monLevel(mon))}</small></span></button>`).join("") || `<div class="empty pc-picker-empty">Im Lager ist kein weiteres Pokémon verfügbar.</div>`}</div>`);
   layer.querySelectorAll("[data-pc-pokemon]").forEach((button) => button.addEventListener("click", async () => {
     try {
@@ -237,7 +248,26 @@ function reportMarkup(mon) {
     ? `<div class="move-list">${availableMoves.map((move) => `<label><input type="checkbox" data-move-choice ${selectedMoveNames.has(moveName(move)) ? "checked" : ""}><span>${escapeHtml(moveName(move))}</span><small>ab Lv. ${moveLevel(move)}</small></label>`).join("")}</div><p class="report-hint">Bis zu vier Attacken auswählbar. Die Speicherung wird mit dem Kampfsystem aktiviert.</p>`
     : `<p>Noch keine Attacken für dieses Pokémon hinterlegt.</p>`;
   const nextMove = lockedMoves[0];
-  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div><section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key,value]) => `<div class="stat-line"><span>${escapeHtml(key)}</span><b>${escapeHtml(value)}</b></div>`).join("") : `<p>Feste Maximalwerte werden mit dem Kampfsystem ergänzt.</p>`}</section>`;
+  const evolution = availableEvolution(mon);
+  const evolutionSection = evolution
+    ? `<section class="report-section report-evolution"><div><span class="evolution-ready-dot" aria-hidden="true"></span><strong>Entwicklung verfügbar</strong><small>${escapeHtml(monName(mon))} kann sich jetzt zu ${escapeHtml(evolution.toName)} entwickeln.</small></div><button type="button" class="dialog-primary" data-report-evolve>Entwickeln</button></section>`
+    : "";
+  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div>${evolutionSection}<section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key,value]) => `<div class="stat-line"><span>${escapeHtml(key)}</span><b>${escapeHtml(value)}</b></div>`).join("") : `<p>Feste Maximalwerte werden mit dem Kampfsystem ergänzt.</p>`}</section>`;
+}
+
+async function showPokemonReport(mon) {
+  await ensurePokemonTypes(mon);
+  const layer = dialog(reportMarkup(mon));
+  layer.querySelector("[data-report-evolve]")?.addEventListener("click", () => {
+    showEvolutionPreview(mon, availableEvolution(mon));
+  });
+  layer.querySelectorAll("[data-move-choice]").forEach((choice) => choice.addEventListener("change", () => {
+    const checked = layer.querySelectorAll("[data-move-choice]:checked");
+    if (checked.length > 4) {
+      choice.checked = false;
+      showNotice("Ein Pokémon kann höchstens vier Attacken gleichzeitig einsetzen.");
+    }
+  }));
 }
 
 async function postAction(action, caughtAt, extra = {}) {
@@ -265,15 +295,8 @@ function showPokemonMenu(mon, context) {
   layer.querySelectorAll("[data-mon-action]").forEach((button) => button.addEventListener("click", async () => {
     const action = button.dataset.monAction;
     if (action === "report") {
-      await ensurePokemonTypes(mon);
-      layer.querySelector(".dialog-card").innerHTML = reportMarkup(mon);
-      layer.querySelectorAll("[data-move-choice]").forEach((choice) => choice.addEventListener("change", () => {
-        const checked = layer.querySelectorAll("[data-move-choice]:checked");
-        if (checked.length > 4) {
-          choice.checked = false;
-          showNotice("Ein Pokémon kann höchstens vier Attacken gleichzeitig einsetzen.");
-        }
-      }));
+      layer.remove();
+      await showPokemonReport(mon);
       return;
     }
     if (action === "item") { layer.remove(); showItemPicker(mon); return; }
@@ -390,16 +413,18 @@ function pcNavigation() {
 }
 
 function renderStorage() {
-  const caught = [...(state.player.caught || [])].sort((a, b) => eventTimestamp(b) - eventTimestamp(a));
+  const caught = (state.player.caught || [])
+    .filter((mon) => !isTeamPokemon(mon))
+    .sort((a, b) => eventTimestamp(b) - eventTimestamp(a));
   return caught.length
-    ? `<div class="storage-grid">${caught.map((mon) => `<button class="card stored-mon mon-button" data-mon-menu="storage" data-caught-at="${Number(mon.caughtAt)}">${pokemonImage(mon)}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${escapeHtml(monLevel(mon))}${mon.isShiny ? " · ✨ Shiny" : ""}</small></div></button>`).join("")}</div>`
+    ? `<div class="storage-grid">${caught.map((mon) => `<button class="card stored-mon mon-button" data-mon-menu="storage" data-caught-at="${Number(mon.caughtAt)}">${evolutionReadyMarkup(mon)}${pokemonImage(mon)}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${escapeHtml(monLevel(mon))}${mon.isShiny ? " · ✨ Shiny" : ""}</small></div></button>`).join("")}</div>`
     : `<div class="empty">Dein Lager ist noch leer.</div>`;
 }
 
 function renderTeamSection() {
   const party = state.player.party || { activeSlot:0, slots:[] };
   const slots = Array.from({ length:6 }, (_, i) => party.slots?.[i] || null);
-  return `<div class="party">${slots.map((mon, i) => mon ? `<button class="card slot mon-button ${Number(party.activeSlot) === i ? "active" : ""}" data-mon-menu="team" data-caught-at="${Number(mon.caughtAt)}">${Number(party.activeSlot) === i ? '<span class="star" title="Partner-Pokémon">★</span>' : ""}${pokemonImage(mon, "team-sprite")}<p class="level">Lv. ${escapeHtml(mon.level || 1)}</p><strong>${escapeHtml(monName(mon))}</strong></button>` : `<button type="button" class="card slot empty-slot" data-empty-slot="${i}" aria-haspopup="menu"><span>Slot ${i + 1} leer</span></button>`).join("")}</div>`;
+  return `<div class="party">${slots.map((mon, i) => mon ? `<button class="card slot mon-button ${Number(party.activeSlot) === i ? "active" : ""}" data-mon-menu="team" data-caught-at="${Number(mon.caughtAt)}">${Number(party.activeSlot) === i ? '<span class="star" title="Partner-Pokémon">★</span>' : ""}${evolutionReadyMarkup(mon)}${pokemonImage(mon, "team-sprite")}<p class="level">Lv. ${escapeHtml(mon.level || 1)}</p><strong>${escapeHtml(monName(mon))}</strong></button>` : `<button type="button" class="card slot empty-slot" data-empty-slot="${i}" aria-haspopup="menu"><span>Slot ${i + 1} leer</span></button>`).join("")}</div>`;
 }
 
 function renderItemsSection() {
@@ -456,7 +481,14 @@ function renderHistory() {
 
 function notificationsMarkup() {
   const notifications = state.notifications || [];
-  return heading("Benachrichtigungen", "Tausch- und Kampfanfragen") + (notifications.length ? `<div class="list">${notifications.map(() => `<article class="card">🔄 Neue Tauschanfrage</article>`).join("")}</div>` : `<div class="empty">Alles ruhig – keine neuen Anfragen.</div>`);
+  const evolutions = state.player.availableEvolutions || [];
+  const evolutionCards = evolutions.map((evolution) => {
+    const mon = ownedMon(evolution.caughtAt);
+    if (!mon) return "";
+    return `<button type="button" class="card evolution-notification" data-evolution-notification="${Number(mon.caughtAt)}">${pokemonImage(mon, "notification-sprite")}<span><strong>${escapeHtml(monName(mon))} kann sich entwickeln!</strong><small>Zu ${escapeHtml(evolution.toName)} entwickeln</small></span><b aria-hidden="true">›</b></button>`;
+  }).join("");
+  const tradeCards = notifications.map(() => `<article class="card">🔄 Neue Tauschanfrage</article>`).join("");
+  return heading("Benachrichtigungen", "Entwicklungen und Anfragen") + (evolutionCards || tradeCards ? `<div class="list">${evolutionCards}${tradeCards}</div>` : `<div class="empty">Alles ruhig – keine neuen Benachrichtigungen.</div>`);
 }
 
 function helpMarkup() {
@@ -484,6 +516,15 @@ function toggleTopOverlay(type) {
   topOverlay.scrollTop = 0;
   helpButton.setAttribute("aria-expanded", String(type === "help"));
   notificationButton.setAttribute("aria-expanded", String(type === "notifications"));
+  topOverlayContent.querySelectorAll("[data-evolution-notification]").forEach((button) => button.addEventListener("click", async () => {
+    const mon = ownedMon(button.dataset.evolutionNotification);
+    if (!mon) return;
+    closeTopOverlay();
+    page = "pc";
+    pcSection = isTeamPokemon(mon) ? "team" : "storage";
+    render();
+    await showPokemonReport(mon);
+  }));
 }
 
 function render() {
@@ -512,7 +553,7 @@ async function load() {
       state.multiplayer.availablePlayers = meta.availablePlayers || [];
     }
     document.querySelector("#trainerName").textContent = state.player.display;
-    const count = state.notifications?.length || 0;
+    const count = (state.notifications?.length || 0) + (state.player.availableEvolutions?.length || 0);
     const badge = document.querySelector("#notificationBadge");
     badge.hidden = !count;
     badge.textContent = count;

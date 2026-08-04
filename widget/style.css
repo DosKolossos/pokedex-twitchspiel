@@ -400,11 +400,95 @@ button {
 }
 
 .stored-mon {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
     min-height: 68px;
     padding: 8px;
+}
+
+.evolution-ready-dot {
+    position: absolute;
+    z-index: 2;
+    top: 7px;
+    right: 7px;
+    width: 9px;
+    height: 9px;
+    border: 2px solid #20283a;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 0 3px #ed334a24;
+}
+
+.report-evolution {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid #ed334a66;
+    background: #ed334a12;
+}
+
+.report-evolution > div {
+    position: relative;
+    padding-left: 17px;
+}
+
+.report-evolution .evolution-ready-dot {
+    top: 3px;
+    left: 0;
+    right: auto;
+}
+
+.report-evolution strong,
+.report-evolution small {
+    display: block;
+}
+
+.report-evolution small {
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.report-evolution button {
+    flex: none;
+    width: auto;
+    padding: 9px 12px;
+}
+
+.evolution-notification {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    text-align: left;
+}
+
+.notification-sprite {
+    width: 45px;
+    height: 45px;
+    object-fit: contain;
+}
+
+.evolution-notification span {
+    flex: 1;
+}
+
+.evolution-notification strong,
+.evolution-notification small {
+    display: block;
+}
+
+.evolution-notification small {
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.evolution-notification > b {
+    color: var(--red);
+    font-size: 22px;
 }
 
 .stored-mon img,
