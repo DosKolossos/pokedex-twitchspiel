@@ -384,6 +384,22 @@ async function handleReward(event) {
   }
 
   const title = normalizeTitle(event.reward?.title);
+  if (title === "wesen ändern") {
+    const user = { userId:String(event.user_id || ""), userName:String(event.user_name || event.user_login || "User") };
+    const output = await game.command("nature", user, String(event.user_input || ""));
+    const valid = Boolean(output.result?.ok);
+    let redemptionUpdated = false;
+    try {
+      await twitch.updateRedemptionStatus({ rewardId:event.reward?.id, redemptionId:event.id, status:valid?"FULFILLED":"CANCELED", tokenManager:broadcasterToken });
+      redemptionUpdated = true;
+    } catch (error) { console.error("[nature] Einlösungsstatus:", error.message); }
+    if (valid && output.message) await sendChat(output.message);
+    else if (!valid) {
+      const reason = output.result?.reason === "no_active_pokemon" ? "Du hast kein aktives Pokémon." : "Wesen nicht erkannt. Beispiele: Mäßig/Modest, Hart/Adamant, Scheu/Timid.";
+      await sendChat(`⚠️ @${user.userName}: ${reason}${redemptionUpdated ? " Die Kanalpunkte wurden zurückerstattet." : " Bitte die Einlösung manuell ablehnen."}`);
+    }
+    return;
+  }
   const itemId = rewardMap[title];
   if (!itemId) {
     console.log(`[reward] nicht zugeordnet: ${event.reward?.title || "?"}`);

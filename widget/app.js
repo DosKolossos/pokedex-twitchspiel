@@ -116,15 +116,29 @@ function normalizedTypes(mon) {
 }
 
 async function ensurePokemonTypes(mon) {
-  if (!mon?.dexId || normalizedTypes(mon).length) return;
+  if (!mon?.dexId || (normalizedTypes(mon).length && mon.baseStats)) return;
   const dexId = Number(mon.dexId);
   if (!pokemonTypeCache.has(dexId)) {
     pokemonTypeCache.set(dexId, fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`, { cache:"force-cache" })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("Typen nicht verfügbar")))
-      .then((pokemon) => pokemon.types.map((entry) => entry.type.name))
-      .catch(() => []));
+      .then((pokemon) => ({ types:pokemon.types.map((entry) => entry.type.name), baseStats:Object.fromEntries(pokemon.stats.map((entry) => [entry.stat.name, entry.base_stat])) }))
+      .catch(() => ({ types:[], baseStats:null })));
   }
-  mon.types = await pokemonTypeCache.get(dexId);
+  const details = await pokemonTypeCache.get(dexId);
+  mon.types = details.types;
+  mon.baseStats = details.baseStats;
+}
+
+const statLabels = { hp:"KP", attack:"Angriff", defense:"Verteidigung", specialAttack:"Spezial-Angriff", specialDefense:"Spezial-Verteidigung", speed:"Initiative" };
+function reportNature(mon) {
+  const id = String(mon?.nature || "hardy").toLowerCase();
+  const nature = window.PokeBattleLab?.NATURES?.[id] || window.PokeBattleLab?.NATURES?.hardy;
+  return { id, name:nature?.[0] || id, up:nature?.[1] || null, down:nature?.[2] || null };
+}
+function calculatedMonStats(mon, level) {
+  if (!mon?.baseStats || !window.PokeBattleLab) return mon?.stats || {};
+  const b=mon.baseStats;
+  return window.PokeBattleLab.stats([b.hp,b.attack,b.defense,b["special-attack"],b["special-defense"],b.speed],level,reportNature(mon).id);
 }
 
 function typeMarkup(mon) {
@@ -243,12 +257,13 @@ function reportMarkup(mon) {
   const availableMoves = learnset.filter((move) => moveLevel(move) <= level);
   const lockedMoves = learnset.filter((move) => moveLevel(move) > level).sort((a, b) => moveLevel(a) - moveLevel(b));
   const selectedMoveNames = new Set((Array.isArray(mon.moves) ? mon.moves : []).map(moveName));
-  const stats = mon.stats || {};
+  const nature = reportNature(mon);
+  const stats = calculatedMonStats(mon, level);
   const moveMenu = availableMoves.length
     ? `<div class="move-list">${availableMoves.map((move) => `<label><input type="checkbox" data-move-choice ${selectedMoveNames.has(moveName(move)) ? "checked" : ""}><span>${escapeHtml(moveName(move))}</span><small>ab Lv. ${moveLevel(move)}</small></label>`).join("")}</div><p class="report-hint">Bis zu vier Attacken auswählbar. Die Speicherung wird mit dem Kampfsystem aktiviert.</p>`
     : `<p>Noch keine Attacken für dieses Pokémon hinterlegt.</p>`;
   const nextMove = lockedMoves[0];
-  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div><section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key,value]) => `<div class="stat-line"><span>${escapeHtml(key)}</span><b>${escapeHtml(value)}</b></div>`).join("") : `<p>Feste Maximalwerte werden mit dem Kampfsystem ergänzt.</p>`}</section>`;
+  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div><section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><div class="nature-line"><span><small>Wesen</small><strong>${escapeHtml(nature.name)}</strong></span><small>${nature.up ? `${escapeHtml(statLabels[nature.up])} ▲ · ${escapeHtml(statLabels[nature.down])} ▼` : "neutral"}</small></div><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key,value]) => `<div class="stat-line ${nature.up===key?"stat-up":nature.down===key?"stat-down":""}"><span>${escapeHtml(statLabels[key] || key)}</span><b>${escapeHtml(value)}${nature.up===key?" ▲":nature.down===key?" ▼":""}</b></div>`).join("") : `<p>Statuswerte konnten nicht geladen werden.</p>`}</section>`;
 }
 
 async function showPokemonReport(mon) {
@@ -438,7 +453,15 @@ function renderPc() {
 function renderMulti() {
   const raid = state.multiplayer?.raid;
   const players = state.multiplayer?.availablePlayers || [];
-  view.innerHTML = heading("Multiplayer", "Nur mit Personen aus dem aktuellen Chat") + `<div class="action-grid"><button class="card action"><span>🔄</span><strong>Tausch</strong><p class="muted">${state.multiplayer?.trades?.length || 0} offene Vorgänge</p></button><button class="card action"><span>🐲</span><strong>Raid</strong><p class="muted">${raid ? "Ein Raid ist aktiv" : "Aktuell kein Raid"}</p></button><button class="card action" disabled><span>⚔️</span><strong>PvP</strong><p class="muted">Kommt später</p></button></div><section class="chat-players"><h2>Im Chat verfügbar</h2>${players.length ? players.map((player) => `<span>@${escapeHtml(player.display)}</span>`).join("") : `<p>Aktuell wurde niemand Weiteres im Chat gesehen.</p>`}</section>`;
+  view.innerHTML = heading("Multiplayer", "Nur mit Personen aus dem aktuellen Chat") + `<div class="action-grid"><button class="card action"><span>🔄</span><strong>Tausch</strong><p class="muted">${state.multiplayer?.trades?.length || 0} offene Vorgänge</p></button><button class="card action"><span>🐲</span><strong>Raid</strong><p class="muted">${raid ? "Ein Raid ist aktiv" : "Aktuell kein Raid"}</p></button><button class="card action battle-lab-button" data-battle-lab><span>⚔️</span><strong>Kampflabor</strong><p class="muted">3 gegen 3 · Testmodus</p></button></div><section class="chat-players"><h2>Im Chat verfügbar</h2>${players.length ? players.map((player) => `<span>@${escapeHtml(player.display)}</span>`).join("") : `<p>Aktuell wurde niemand Weiteres im Chat gesehen.</p>`}</section>`;
+  view.querySelector("[data-battle-lab]")?.addEventListener("click", showBattleLab);
+}
+
+function showBattleLab() {
+  const result = window.PokeBattleLab.simulate({ seed:Math.floor(Math.random()*999999)+1 });
+  const teamMarkup = result.state.map((side,index) => `<section class="battle-team"><h3>${escapeHtml(side.name)}${result.winner===index?" 🏆":""}</h3><div>${side.team.map((mon) => `<article><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mon.dexId}.png" alt=""><span><strong>${escapeHtml(mon.name)}</strong><small>${escapeHtml(window.PokeBattleLab.NATURES[mon.nature][0])} · ${mon.hp}/${mon.stats.hp} KP</small></span></article>`).join("")}</div></section>`).join("");
+  const layer = dialog(`<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="battle-lab"><small class="evolution-eyebrow">ISOLIERTER TESTMODUS</small><h2>3-gegen-3-Kampflabor</h2><p>Seed ${result.seed} · keine Spielerdaten werden verändert</p><div class="battle-teams">${teamMarkup}</div><details open><summary>Kampfprotokoll (${result.log.filter(x=>/^Zug/.test(x.text)).length} Züge)</summary><div class="battle-log">${result.log.map((entry) => `<p class="${/^Zug/.test(entry.text)?"turn":""}">${escapeHtml(entry.text)}</p>`).join("")}</div></details><button class="dialog-primary" data-battle-again>Neu simulieren</button></div>`);
+  layer.querySelector("[data-battle-again]").addEventListener("click",()=>{layer.remove();showBattleLab();});
 }
 
 function renderRanks() {

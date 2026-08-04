@@ -74,6 +74,16 @@ class TwitchApi {
     const data = await response.json();
     return Array.isArray(data.data) && data.data.length > 0;
   }
+
+  async updateRedemptionStatus({ rewardId, redemptionId, status, tokenManager }) {
+    const url = new URL("https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions");
+    url.searchParams.set("broadcaster_id", this.broadcasterUserId);
+    url.searchParams.set("reward_id", String(rewardId));
+    url.searchParams.set("id", String(redemptionId));
+    const response = await this.request(url.toString(), { method:"PATCH", body:JSON.stringify({ status }) }, tokenManager);
+    if (!response.ok) throw new Error(`Einlösung konnte nicht auf ${status} gesetzt werden (${response.status})`);
+    return response.json();
+  }
 }
 
 module.exports = { TwitchApi };

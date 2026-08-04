@@ -9,6 +9,7 @@ const xp = require("../lib/xp");
 const evo = require("../lib/evo");
 const items = require("../lib/items");
 const raid = require("../lib/raid");
+const natures = require("../lib/natures");
 
 function describePokemon(p) {
   const shiny = p?.isShiny ? "✨ " : "";
@@ -48,7 +49,7 @@ function awardCatch(winner, pokemon) {
   entry.caught = Array.isArray(entry.caught) ? entry.caught : [];
 
   const caughtAt = Date.now();
-  entry.caught.push({ ...pokemon, caughtAt });
+  entry.caught.push({ ...pokemon, nature:natures.randomNature().id, caughtAt });
   ensureDexHistoryEntry(entry, pokemon, caughtAt, "catch");
   store.writeJson(paths.POKEDEX_JSON, pokedex);
   return { ok: true, caughtAt };
@@ -134,6 +135,13 @@ class GameAdapter {
       case "grantitem":
         items.handleGrantItem({ userId, userName, rawInput });
         return { result: { ok: true }, message: text(paths.itemMessageFile(userId)) };
+      case "nature": {
+        const result = natures.changeActiveNature({ userId, userName, input:rawInput, store, paths });
+        if (!result.ok) return { result, message:"" };
+        const labels={attack:"Angriff",defense:"Verteidigung",specialAttack:"Spezial-Angriff",specialDefense:"Spezial-Verteidigung",speed:"Initiative"};
+        const change = result.nature.up ? `${labels[result.nature.up]} ▲ / ${labels[result.nature.down]} ▼` : "neutral";
+        return { result, message:`🧬 @${userName}: ${result.pokemon} hat jetzt das Wesen ${result.nature.de} (${result.nature.en}) · ${change}.` };
+      }
       case "trade":
         trade.handleTrade({ userId, userName, rawInput: prefix(rawInput, "trade") });
         return { result: { ok: true }, message: text(paths.tradeMessageFile(userId)) };
