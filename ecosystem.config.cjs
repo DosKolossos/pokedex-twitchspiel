@@ -17,7 +17,7 @@ module.exports = {
     {
       name: "pokedex-overlay",
       cwd: "/opt/pokedex",
-      script: "overlay-server.js",
+      script: "overlay-server-v8.js",
       interpreter: "/root/.nvm/versions/node/v22.23.1/bin/node",
       env: {
         NODE_ENV: "production"

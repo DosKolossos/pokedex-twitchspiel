@@ -14,7 +14,7 @@ function getApiBaseUrl() {
   if (configuredBaseUrl) return configuredBaseUrl.replace(/\/$/, "");
 
   const isLocalHost = ["127.0.0.1", "localhost"].includes(location.hostname);
-  const usesLocalOverlayServer = isLocalHost && location.port === "3010";
+  const usesLocalOverlayServer = isLocalHost && ["3010", "8080"].includes(location.port);
 
   // Live Server stellt nur die Widget-Dateien bereit. In diesem Fall kommen
   // die echten Spielerdaten von Hetzner. Auf Hetzner und beim lokalen
