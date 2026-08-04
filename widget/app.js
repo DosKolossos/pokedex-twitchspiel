@@ -10,16 +10,18 @@ let twitchAuthToken = "";
 phone.dataset.popout = params.get("popout") === "true";
 
 function getApiBaseUrl() {
-  const configuredBaseUrl = params.get("apiBase");
-  if (configuredBaseUrl) return configuredBaseUrl.replace(/\/$/, "");
-
   const isLocalHost = ["127.0.0.1", "localhost"].includes(location.hostname);
   const usesLocalOverlayServer = isLocalHost && ["3010", "8080"].includes(location.port);
+
+  if (usesLocalOverlayServer) return "";
+
+  const configuredBaseUrl = params.get("apiBase");
+  if (configuredBaseUrl) return configuredBaseUrl.replace(/\/$/, "");
 
   // Live Server stellt nur die Widget-Dateien bereit. In diesem Fall kommen
   // die echten Spielerdaten von Hetzner. Auf Hetzner und beim lokalen
   // Overlay-Server bleibt die API dagegen relativ zur aktuellen Seite.
-  if (isLocalHost && !usesLocalOverlayServer) {
+  if (isLocalHost) {
     return "https://overlay.schiggygang.de";
   }
 
@@ -69,6 +71,12 @@ function activePartner() {
 
 function monLevel(mon) {
   return state?.player?.progress?.[`${state?.player?.id || developmentUserId}:${Number(mon?.caughtAt)}`]?.level || mon?.level || 1;
+}
+
+function availableEvolution(mon) {
+  return (state?.player?.availableEvolutions || []).find(
+    (evolution) => Number(evolution?.caughtAt) === Number(mon?.caughtAt)
+  ) || null;
 }
 
 function xpToNextLevel(level) {
@@ -249,9 +257,10 @@ function showPokemonMenu(mon, context) {
     return;
   }
   selectedMon = mon; selectedContext = context;
+  const evolution = availableEvolution(mon);
   const actions = context === "storage"
-    ? [["report","Bericht"],["evolve","Entwickeln"],["team_add","Ins Team"],["item","Item verwenden"],["release","Freilassen"]]
-    : [["report","Bericht"],["evolve","Entwickeln"],["team_remove","Auf PC ablegen"],["item","Item verwenden"],["team_active","Aktiv setzen"]];
+    ? [["report","Bericht"], ...(evolution ? [["evolve","Entwickeln"]] : []), ["team_add","Ins Team"],["item","Item verwenden"],["release","Freilassen"]]
+    : [["report","Bericht"], ...(evolution ? [["evolve","Entwickeln"]] : []), ["team_remove","Auf PC ablegen"],["item","Item verwenden"],["team_active","Aktiv setzen"]];
   const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><div class="menu-mon">${pokemonImage(mon,"menu-sprite")}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${monLevel(mon)}</small></div></div><div class="action-menu">${actions.map(([id,label]) => `<button data-mon-action="${id}" class="${id === "release" ? "danger" : ""}">${label}</button>`).join("")}</div>`);
   layer.querySelectorAll("[data-mon-action]").forEach((button) => button.addEventListener("click", async () => {
     const action = button.dataset.monAction;
@@ -273,11 +282,35 @@ function showPokemonMenu(mon, context) {
       return;
     }
     if (action === "evolve") {
-      showConfirmation({ title:`${monName(mon)} entwickeln?`, message:`Möchtest du die Entwicklung von ${monName(mon)} jetzt starten?`, confirmLabel:"Entwickeln", onConfirm:() => postAction("evolve", mon.caughtAt) });
+      showEvolutionPreview(mon, evolution);
       return;
     }
     try { button.disabled = true; await postAction(action, mon.caughtAt); layer.remove(); } catch (error) { showNotice(error.message, "Aktion fehlgeschlagen"); button.disabled = false; }
   }));
+}
+
+function showEvolutionPreview(mon, evolution) {
+  if (!evolution) {
+    showNotice("Dieses Pokémon kann sich aktuell nicht entwickeln.");
+    return;
+  }
+
+  const target = {
+    dexId: evolution.toDexId,
+    displayName: evolution.toName,
+    spriteUrl: evolution.toSpriteUrl,
+  };
+  const layer = dialog(`<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="evolution-preview"><small class="evolution-eyebrow">ENTWICKLUNG</small><div class="evolution-pokemon"><div class="evolution-stage">${pokemonImage(mon, "evolution-sprite")}<strong>${escapeHtml(monName(mon))}</strong></div><span class="evolution-arrow" aria-label="entwickelt sich zu">→</span><div class="evolution-stage evolution-target">${pokemonImage(target, "evolution-sprite")}<strong>${escapeHtml(monName(target))}</strong></div></div><button class="dialog-primary evolution-confirm" data-evolution-confirm>Jetzt entwickeln!</button></div>`);
+  layer.querySelector("[data-evolution-confirm]").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      button.disabled = true;
+      await postAction("evolve", mon.caughtAt);
+      layer.remove();
+    } catch (error) {
+      showNotice(error.message, "Entwicklung fehlgeschlagen");
+    }
+  });
 }
 
 function showItemPicker(mon, preselectedItem = "") {

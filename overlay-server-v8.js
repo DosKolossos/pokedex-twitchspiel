@@ -69,6 +69,7 @@ app.get("/api/widget/player", (req, res) => {
   const profiles = readJsonSafe(paths.PROFILES_JSON, { users: {} });
   const trades = readJsonSafe(paths.TRADES_JSON, { pending: [] });
   const dexmap = readJsonSafe(paths.DEXMAP_JSON, {});
+  const evolutionRules = readJsonSafe(paths.EVOLUTIONS_JSON, { byDexId: {} });
   const raid = readJsonSafe(paths.RAID_STATE_JSON, { current: null });
 
   const dexUser = pokedex.users?.[userId] || null;
@@ -101,6 +102,24 @@ app.get("/api/widget/player", (req, res) => {
     )
     .sort((a, b) => Number(a.dexId || 9999) - Number(b.dexId || 9999));
 
+  const dexById = new Map(dex.map((entry) => [Number(entry.dexId), entry]));
+  const availableEvolutions = caught.flatMap((mon) => {
+    const rule = evolutionRules.byDexId?.[String(mon?.dexId)];
+    if (!rule) return [];
+    const caughtAt = Number(mon?.caughtAt || 0);
+    const key = `${userId}:${caughtAt}`;
+    const level = Math.max(1, Number(profile?.progress?.[key]?.level || mon?.level || 1));
+    if (level < Number(rule.level) || profile?.evoLocked?.[key]) return [];
+    const target = dexById.get(Number(rule.toDexId)) || {};
+    return [{
+      caughtAt,
+      fromDexId: Number(mon.dexId),
+      toDexId: Number(rule.toDexId),
+      toName: target.displayName || target.name || `#${Number(rule.toDexId)}`,
+      toSpriteUrl: target.spriteUrl || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${Number(rule.toDexId)}.png`,
+    }];
+  });
+
   return res.json({
     ok: true,
     serverNow: Date.now(),
@@ -112,6 +131,7 @@ app.get("/api/widget/player", (req, res) => {
       party,
       progress: profile?.progress || {},
       items: profile?.items || {},
+      availableEvolutions,
     },
     dex,
     multiplayer: {

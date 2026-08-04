@@ -1380,6 +1380,65 @@ button {
     text-align: center;
 }
 
+.evolution-preview {
+    display: grid;
+    gap: 18px;
+    padding: 10px 4px 4px;
+    text-align: center;
+}
+
+.evolution-eyebrow {
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .16em;
+}
+
+.evolution-pokemon {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr);
+    align-items: center;
+    gap: 4px;
+}
+
+.evolution-stage {
+    min-width: 0;
+}
+
+.evolution-stage strong {
+    display: block;
+    overflow: hidden;
+    margin-top: 5px;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.evolution-target {
+    color: #79c6ff;
+}
+
+.evolution-sprite {
+    width: 82px;
+    height: 82px;
+    max-width: 100%;
+    object-fit: contain;
+    image-rendering: auto;
+}
+
+.evolution-arrow {
+    color: #79c6ff;
+    font-size: 30px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.evolution-confirm {
+    width: 100%;
+    min-height: 44px;
+    font-size: 13px;
+}
+
 .dialog-message p {
     margin: 0;
     color: var(--muted);
