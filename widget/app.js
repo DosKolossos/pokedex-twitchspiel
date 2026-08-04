@@ -144,6 +144,25 @@ function dialog(markup) {
   return layer;
 }
 
+function showNotice(message, title = "Hinweis") {
+  return dialog(`<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="dialog-message"><span class="dialog-message-icon" aria-hidden="true">!</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><button class="dialog-primary" data-dialog-close>Okay</button></div>`);
+}
+
+function showConfirmation({ title, message, confirmLabel = "Bestätigen", danger = false, onConfirm }) {
+  const layer = dialog(`<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="dialog-message"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><div class="dialog-actions"><button class="dialog-secondary" data-dialog-close>Abbrechen</button><button class="dialog-primary ${danger ? "danger" : ""}" data-dialog-confirm>${escapeHtml(confirmLabel)}</button></div></div>`);
+  layer.querySelector("[data-dialog-confirm]").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      button.disabled = true;
+      await onConfirm();
+      layer.remove();
+    } catch (error) {
+      showNotice(error.message, "Aktion fehlgeschlagen");
+    }
+  });
+  return layer;
+}
+
 function closeEmptySlotMenu() {
   emptySlotMenu?.remove();
   emptySlotMenu = null;
@@ -189,7 +208,7 @@ function showPcPokemonPicker(slotIndex) {
       await postAction("team_add", button.dataset.pcPokemon, { slotIndex });
       layer.remove();
     } catch (error) {
-      alert(error.message);
+      showNotice(error.message, "Aktion fehlgeschlagen");
       button.disabled = false;
     }
   }));
@@ -216,19 +235,23 @@ function reportMarkup(mon) {
 async function postAction(action, caughtAt, extra = {}) {
   const response = await fetch(`${apiBaseUrl}/api/widget/action${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method:"POST", headers:apiHeaders(true), body:JSON.stringify({ action, caughtAt, ...extra }) });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.ok) throw new Error(({ team_full:"Dein Team ist voll.", slot_occupied:"Dieser Teamslot ist inzwischen belegt. Bitte wähle einen anderen.", already_in_team:"Dieses Pokémon ist bereits im Team.", remove_from_team_first:"Lege das Pokémon zuerst auf dem PC ab.", not_enough_items:"Du hast nicht genug davon.", item_not_supported_yet:"Entwicklungssteine folgen mit dem Evolutions-Dialog." })[result.error] || result.error || "Aktion fehlgeschlagen");
+  if (!response.ok || !result.ok) {
+    const messages = { team_full:"Dein Team ist voll.", slot_occupied:"Dieser Teamslot ist inzwischen belegt. Bitte wähle einen anderen.", already_in_team:"Dieses Pokémon ist bereits im Team.", remove_from_team_first:"Lege das Pokémon zuerst auf dem PC ab.", not_enough_items:"Du hast nicht genug davon.", item_not_supported_yet:"Dieser Gegenstand kann hier noch nicht verwendet werden.", no_evolution:"Für dieses Pokémon ist keine Entwicklung verfügbar.", evolution_locked:"Du hast die Entwicklung dieses Pokémon zuvor gesperrt.", evolution_failed:"Die Entwicklung konnte nicht abgeschlossen werden." };
+    const message = result.error === "evolution_level" ? `Dieses Pokémon kann sich ab Level ${result.requiredLevel} entwickeln.` : messages[result.error];
+    throw new Error(message || result.error || "Aktion fehlgeschlagen");
+  }
   await load();
 }
 
 function showPokemonMenu(mon, context) {
   if (!mon) {
-    alert("Dieses Pokémon konnte nicht eindeutig geladen werden. Bitte aktualisiere das Widget.");
+    showNotice("Dieses Pokémon konnte nicht eindeutig geladen werden. Bitte aktualisiere das Widget.");
     return;
   }
   selectedMon = mon; selectedContext = context;
   const actions = context === "storage"
-    ? [["report","Bericht"],["team_add","Ins Team"],["item","Item verwenden"],["release","Freilassen"]]
-    : [["report","Bericht"],["team_remove","Auf PC ablegen"],["item","Item verwenden"],["team_active","Aktiv setzen"]];
+    ? [["report","Bericht"],["evolve","Entwickeln"],["team_add","Ins Team"],["item","Item verwenden"],["release","Freilassen"]]
+    : [["report","Bericht"],["evolve","Entwickeln"],["team_remove","Auf PC ablegen"],["item","Item verwenden"],["team_active","Aktiv setzen"]];
   const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><div class="menu-mon">${pokemonImage(mon,"menu-sprite")}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${monLevel(mon)}</small></div></div><div class="action-menu">${actions.map(([id,label]) => `<button data-mon-action="${id}" class="${id === "release" ? "danger" : ""}">${label}</button>`).join("")}</div>`);
   layer.querySelectorAll("[data-mon-action]").forEach((button) => button.addEventListener("click", async () => {
     const action = button.dataset.monAction;
@@ -239,14 +262,21 @@ function showPokemonMenu(mon, context) {
         const checked = layer.querySelectorAll("[data-move-choice]:checked");
         if (checked.length > 4) {
           choice.checked = false;
-          alert("Ein Pokémon kann höchstens vier Attacken gleichzeitig einsetzen.");
+          showNotice("Ein Pokémon kann höchstens vier Attacken gleichzeitig einsetzen.");
         }
       }));
       return;
     }
     if (action === "item") { layer.remove(); showItemPicker(mon); return; }
-    if (action === "release" && !confirm(`${monName(mon)} wirklich freilassen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
-    try { button.disabled = true; await postAction(action, mon.caughtAt); layer.remove(); } catch (error) { alert(error.message); button.disabled = false; }
+    if (action === "release") {
+      showConfirmation({ title:`${monName(mon)} freilassen?`, message:"Diese Aktion kann nicht rückgängig gemacht werden.", confirmLabel:"Freilassen", danger:true, onConfirm:() => postAction("release", mon.caughtAt) });
+      return;
+    }
+    if (action === "evolve") {
+      showConfirmation({ title:`${monName(mon)} entwickeln?`, message:`Möchtest du die Entwicklung von ${monName(mon)} jetzt starten?`, confirmLabel:"Entwickeln", onConfirm:() => postAction("evolve", mon.caughtAt) });
+      return;
+    }
+    try { button.disabled = true; await postAction(action, mon.caughtAt); layer.remove(); } catch (error) { showNotice(error.message, "Aktion fehlgeschlagen"); button.disabled = false; }
   }));
 }
 
@@ -257,9 +287,18 @@ function showItemPicker(mon, preselectedItem = "") {
     const id = button.dataset.pickItem;
     const isCandy = id.startsWith("xp_candy_");
     const max = Number(state.player.items[id] || 1);
-    const amount = isCandy ? Math.max(1, Math.min(max, Number(prompt(`Wie viele möchtest du verwenden? (1–${max})`, "1") || 0))) : 1;
-    if (!amount || !confirm(`${amount}× ${button.querySelector("strong").textContent} auf ${monName(mon)} anwenden?`)) return;
-    postAction("item_use", mon.caughtAt, { itemId:id, amount }).then(() => layer.remove()).catch((error) => alert(error.message));
+    const label = button.querySelector("strong").textContent;
+    const card = layer.querySelector(".dialog-card");
+    card.innerHTML = `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="dialog-message item-use-confirm"><span class="item-icon item-confirm-icon"><img src="${itemSprite(id)}" alt=""></span><h2>${escapeHtml(label)}</h2><p>Auf ${escapeHtml(monName(mon))} anwenden</p>${isCandy ? `<label class="amount-field"><span>Menge</span><input type="number" inputmode="numeric" min="1" max="${max}" value="1" data-item-amount><small>Verfügbar: ${max}×</small></label>` : ""}<div class="dialog-actions"><button class="dialog-secondary" data-dialog-back>Zurück</button><button class="dialog-primary" data-item-confirm>Verwenden</button></div></div>`;
+    card.querySelector("[data-dialog-back]").addEventListener("click", () => { layer.remove(); showItemPicker(mon, preselectedItem); });
+    card.querySelector("[data-item-confirm]").addEventListener("click", async (event) => {
+      const confirmButton = event.currentTarget;
+      const amountInput = card.querySelector("[data-item-amount]");
+      const amount = isCandy ? Math.max(1, Math.min(max, Math.floor(Number(amountInput?.value || 1)))) : 1;
+      if (amountInput) amountInput.value = amount;
+      try { confirmButton.disabled = true; await postAction("item_use", mon.caughtAt, { itemId:id, amount }); layer.remove(); }
+      catch (error) { showNotice(error.message, "Item konnte nicht verwendet werden"); }
+    });
   }));
 }
 

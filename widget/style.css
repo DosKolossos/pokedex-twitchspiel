@@ -1372,6 +1372,96 @@ button {
     object-fit: contain;
 }
 
+.dialog-message {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 8px 2px 2px;
+    text-align: center;
+}
+
+.dialog-message p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.dialog-message-icon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border-radius: 50%;
+    background: #2d3c58;
+    color: #8ec5ff;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.dialog-primary,
+.dialog-secondary {
+    min-height: 38px;
+    border: 0;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.dialog-primary { background: #2f8cff; }
+.dialog-primary.danger { background: #d84b5f; }
+.dialog-secondary { background: #30394c; }
+.dialog-primary:disabled { opacity: .55; cursor: wait; }
+
+.item-confirm-icon {
+    width: 58px;
+    height: 58px;
+}
+
+.item-confirm-icon img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+}
+
+.amount-field {
+    display: grid;
+    grid-template-columns: 1fr 70px;
+    align-items: center;
+    gap: 4px 10px;
+    width: 100%;
+    padding: 9px;
+    border-radius: 10px;
+    background: #222a3a;
+    text-align: left;
+    font-size: 10px;
+}
+
+.amount-field input {
+    width: 100%;
+    padding: 7px;
+    border: 1px solid #48546d;
+    border-radius: 8px;
+    background: #171d29;
+    color: #fff;
+    text-align: center;
+}
+
+.amount-field small {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    font-size: 8px;
+}
+
 .chat-players h2 {
     margin: 14px 0 8px;
     font-size: 13px;
