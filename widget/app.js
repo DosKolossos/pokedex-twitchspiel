@@ -248,19 +248,12 @@ function reportMarkup(mon) {
     ? `<div class="move-list">${availableMoves.map((move) => `<label><input type="checkbox" data-move-choice ${selectedMoveNames.has(moveName(move)) ? "checked" : ""}><span>${escapeHtml(moveName(move))}</span><small>ab Lv. ${moveLevel(move)}</small></label>`).join("")}</div><p class="report-hint">Bis zu vier Attacken auswählbar. Die Speicherung wird mit dem Kampfsystem aktiviert.</p>`
     : `<p>Noch keine Attacken für dieses Pokémon hinterlegt.</p>`;
   const nextMove = lockedMoves[0];
-  const evolution = availableEvolution(mon);
-  const evolutionSection = evolution
-    ? `<section class="report-section report-evolution"><div><span class="evolution-ready-dot" aria-hidden="true"></span><strong>Entwicklung verfügbar</strong><small>${escapeHtml(monName(mon))} kann sich jetzt zu ${escapeHtml(evolution.toName)} entwickeln.</small></div><button type="button" class="dialog-primary" data-report-evolve>Entwickeln</button></section>`
-    : "";
-  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div>${evolutionSection}<section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key,value]) => `<div class="stat-line"><span>${escapeHtml(key)}</span><b>${escapeHtml(value)}</b></div>`).join("") : `<p>Feste Maximalwerte werden mit dem Kampfsystem ergänzt.</p>`}</section>`;
+  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div><section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key,value]) => `<div class="stat-line"><span>${escapeHtml(key)}</span><b>${escapeHtml(value)}</b></div>`).join("") : `<p>Feste Maximalwerte werden mit dem Kampfsystem ergänzt.</p>`}</section>`;
 }
 
 async function showPokemonReport(mon) {
   await ensurePokemonTypes(mon);
   const layer = dialog(reportMarkup(mon));
-  layer.querySelector("[data-report-evolve]")?.addEventListener("click", () => {
-    showEvolutionPreview(mon, availableEvolution(mon));
-  });
   layer.querySelectorAll("[data-move-choice]").forEach((choice) => choice.addEventListener("change", () => {
     const checked = layer.querySelectorAll("[data-move-choice]:checked");
     if (checked.length > 4) {
@@ -523,7 +516,7 @@ function toggleTopOverlay(type) {
     page = "pc";
     pcSection = isTeamPokemon(mon) ? "team" : "storage";
     render();
-    await showPokemonReport(mon);
+    showPokemonMenu(mon, pcSection);
   }));
 }
 

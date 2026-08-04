@@ -421,42 +421,6 @@ button {
     box-shadow: 0 0 0 3px #ed334a24;
 }
 
-.report-evolution {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    border: 1px solid #ed334a66;
-    background: #ed334a12;
-}
-
-.report-evolution > div {
-    position: relative;
-    padding-left: 17px;
-}
-
-.report-evolution .evolution-ready-dot {
-    top: 3px;
-    left: 0;
-    right: auto;
-}
-
-.report-evolution strong,
-.report-evolution small {
-    display: block;
-}
-
-.report-evolution small {
-    margin-top: 3px;
-    color: var(--muted);
-}
-
-.report-evolution button {
-    flex: none;
-    width: auto;
-    padding: 9px 12px;
-}
-
 .evolution-notification {
     display: flex;
     width: 100%;
