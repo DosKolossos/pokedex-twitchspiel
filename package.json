@@ -13,6 +13,7 @@
     "widget:dev": "node scripts/widget-dev-server.js",
     "test:battle": "node scripts/test-battle-lab.js",
     "analyze:battles": "node scripts/analyze-ten-battles.js",
+    "sprites:battle": "node scripts/download-battle-sprites.js",
     "assign:natures": "node scripts/assign-natures.js",
     "check": "node scripts/check-project.js",
     "verify-data": "node scripts/verify-data.js"
