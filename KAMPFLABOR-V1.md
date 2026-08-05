@@ -1,4 +1,4 @@
-# Kampflabor v1
+# Kampflabor v1.3
 
 ## Enthalten
 
@@ -12,6 +12,21 @@
 - reproduzierbare Simulationen durch einen sichtbaren Seed
 
 Das Kampflabor schreibt weder Ergebnisse noch KP in Spielerdaten. Es ist bewusst ein Testmodus.
+
+## Entscheidungslogik v1.3
+
+- Erzwungene Einwechslungen werden vor der nächsten Aktionswahl vollständig abgehandelt.
+- Ein K.-o. verwirft die noch geplante Aktion des besiegten Pokémon.
+- Immunitäten verursachen exakt 0 Schaden; wirkungslose Statusattacken werden erkannt.
+- Ein Wechsel wird mit dem erwarteten Treffer auf das eingewechselte Pokémon bewertet.
+- Schnelle Pokémon nutzen möglichen freien Schaden, bevor sie unnötig wechseln.
+- Fragile Pokémon werden nicht in einen prognostizierten K.-o. eingewechselt.
+- Wiederholte Wechsel kurz hintereinander erhalten eine zusätzliche Wechselhürde.
+- Der strategische Restwert schützt mögliche Winconditions gegen das verbleibende Team.
+- Speed-Ties werden bei der tatsächlichen Zugreihenfolge 50/50 aufgelöst.
+
+Das Labor besitzt absichtlich vollständige Informationen. Das Wissensmodell für echtes PvP
+(bekanntes Team, gesichtete Attacken und nur vermutete Coverage) folgt mit der PvP-Anbindung.
 
 ## Einmalig nach dem Deployment
 
