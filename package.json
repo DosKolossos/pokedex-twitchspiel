@@ -12,6 +12,7 @@
     "overlay": "node overlay-server-v8.js",
     "widget:dev": "node scripts/widget-dev-server.js",
     "test:battle": "node scripts/test-battle-lab.js",
+    "analyze:battles": "node scripts/analyze-ten-battles.js",
     "assign:natures": "node scripts/assign-natures.js",
     "check": "node scripts/check-project.js",
     "verify-data": "node scripts/verify-data.js"

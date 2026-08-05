@@ -37,6 +37,14 @@ cd /opt/pokedex
 npm run test:battle
 ```
 
+## KI-Analyse mit zehn unterschiedlichen Kämpfen
+
+```bash
+npm run analyze:battles
+```
+
+Der Befehl simuliert zehn feste 3-gegen-3-Szenarien mit unterschiedlichen Teams und reproduzierbaren Seeds. Pikachu bleibt ausdrücklich Teil mehrerer Tests. Ausgegeben werden die vollständigen Zugfolgen sowie bei Wechseln die prognostizierte beste Attacke, deren erwarteter Schaden und der erwartete Gegenschaden. Das Ziel ist nicht eine ausgeglichene Siegquote, sondern das Erkennen unplausibler Angriffe, Statuszüge, Einwechslungen und Wechselketten.
+
 Im Widget: **Multi → Kampflabor**. Jeder Klick auf **Neu simulieren** erzeugt einen neuen Testkampf.
 
 Die Twitch-Belohnung muss exakt `Wesen ändern` heißen und eine Texteingabe verlangen. Beispiele: `Mäßig`, `Modest`, `Hart`, `Adamant`, `Scheu` oder `Timid`.
