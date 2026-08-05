@@ -38,10 +38,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 .combatant-player{width:330px;height:330px;left:180px;bottom:95px}
 .combatant.enter-left{animation:enterLeft .52s both}
 .combatant.enter-right{animation:enterRight .52s both}
-.combatant.hit{animation:hit .38s both;filter:brightness(2.2)}
+.combatant.hit{filter:brightness(2.2)}
 .combatant.faint{transform:translateY(100px) scale(.82);opacity:0;filter:grayscale(1)}
-.combatant.attack-left{animation:attackLeft .46s both}
-.combatant.attack-right{animation:attackRight .46s both}
+.combatant.attack-left,.combatant.attack-right{transform:none}
 
 .move-effect{--effect:#fff;position:absolute;z-index:10;width:82px;height:82px;border-radius:50%;opacity:0;pointer-events:none;background:radial-gradient(circle,#fff 0 10%,var(--effect) 28%,transparent 70%);filter:drop-shadow(0 0 18px var(--effect))}
 .move-effect.fire{--effect:#ff662e}
@@ -75,17 +74,6 @@ to{transform:none}
 }
 @keyframes enterRight{from{transform:translateX(110px) scale(.7)}
 to{transform:none}
-}
-@keyframes hit{0%,100%{transform:none}
-20%{transform:translateX(-13px)}
-45%{transform:translateX(11px)}
-70%{transform:translateX(-6px)}
-}
-@keyframes attackLeft{0%,100%{transform:none}
-50%{transform:translate(46px,-20px)}
-}
-@keyframes attackRight{0%,100%{transform:none}
-50%{transform:translate(-42px,20px)}
 }
 @keyframes effectToEnemy{0%{left:440px;top:390px;opacity:0;transform:scale(.35)}
 25%{opacity:1}
