@@ -34,7 +34,17 @@
 
   function renderTeam(state,side){const root=side?dom.rightTeam:dom.leftTeam;root.innerHTML="";state.teams[side].forEach(mon=>{const slot=document.createElement("div");slot.className=`team-slot${state.active[side]===mon.index?" active":""}${mon.fainted?" fainted":""}`;const img=document.createElement("img");installImage(img,`/sprites/icons/${mon.dexId}.png`,`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mon.dexId}.png`);slot.append(img);root.append(slot);});}
   function renderPanel(panel,mon,exact){const ratio=Math.max(0,mon.hp/mon.maxHp),fill=$("[data-fill]",panel);$("[data-name]",panel).textContent=mon.name;$("[data-percent]",panel).textContent=`${Math.ceil(ratio*100)} %`;fill.style.width=`${ratio*100}%`;fill.classList.toggle("medium",ratio<=.5&&ratio>.2);fill.classList.toggle("low",ratio<=.2);const badge=$("[data-status]",panel);badge.hidden=!mon.status;badge.className=`status ${mon.status||""}`;badge.textContent=mon.status==="burned"?"BRN":mon.status==="paralyzed"?"PAR":"";const hp=$("[data-exact]",panel);if(hp)hp.textContent=exact?`${mon.hp} / ${mon.maxHp} KP`:"";}
-  function renderActive(state,side,enter=false){const mon=active(state,side),box=side?dom.right:dom.left,panel=side?dom.rightPanel:dom.leftPanel,img=$("img",box);box.style.opacity="";box.className=`combatant combatant-${side?"enemy":"player"}`;installImage(img,sprite(mon,!side),spriteFallback(mon,!side));renderPanel(panel,mon,!side);if(enter){const enterClass=side?"enter-right":"enter-left";void box.offsetWidth;box.classList.add(enterClass);box.addEventListener("animationend",()=>box.classList.remove(enterClass),{once:true});}renderTeam(state,side);}
+  function playEntry(box,side){
+    box.getAnimations().forEach((animation)=>animation.cancel());
+    box.animate(
+      [
+        {transform:`translateX(${side?110:-110}px) scale(.7)`},
+        {transform:"translateX(0) scale(1)"}
+      ],
+      {duration:520,easing:"ease-out"}
+    );
+  }
+  function renderActive(state,side,enter=false){const mon=active(state,side),box=side?dom.right:dom.left,panel=side?dom.rightPanel:dom.leftPanel,img=$("img",box);box.style.opacity="";box.className=`combatant combatant-${side?"enemy":"player"}`;installImage(img,sprite(mon,!side),spriteFallback(mon,!side));renderPanel(panel,mon,!side);if(enter)playEntry(box,side);renderTeam(state,side);}
   function damagePop(mon,amount,label=""){dom.damage.className=`damage-pop ${mon.side?"enemy":"player"}`;dom.damage.innerHTML=`−${Math.max(1,Math.round(amount/mon.maxHp*100))} %${label?`<small>${label}</small>`:""}`;void dom.damage.offsetWidth;dom.damage.classList.add("show");}
   async function playMove(state,event){const attackerBox=event.side?dom.right:dom.left,defenderBox=event.side?dom.left:dom.right;dom.message.textContent=`${event.attacker.name} setzt ${event.move?.name||"eine Attacke"} ein!`;attackerBox.classList.add(event.side?"attack-right":"attack-left");dom.effect.className=`move-effect ${event.move?.type||"normal"} ${event.side?"to-player":"to-enemy"}`;await sleep(460);const defender=findMon(state,event.defender.name);defender.hp=event.after;defenderBox.classList.add("hit");damagePop(defender,event.amount,event.effectiveness.includes("sehr effektiv")?"SEHR EFFEKTIV":"");renderPanel(defender.side?dom.rightPanel:dom.leftPanel,defender,!defender.side);await sleep(780);attackerBox.classList.remove("attack-left","attack-right");defenderBox.classList.remove("hit");}
 

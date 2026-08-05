@@ -1,5 +1,9 @@
 # Kampfoverlay – erster Vorführmodus
 
+## Änderung in v1.9
+
+Die Einfahrt der Pokémon ist jetzt eine abgeschlossene Einzelanimation. Sie wird ausschließlich beim Kampfbeginn und bei einem echten Pokémon-Wechsel ausgelöst und kann zwischen zwei Attacken nicht erneut starten.
+
 Der Prototyp spielt Kampf 4 aus dem Kampflabor in klassischer Perspektive ab. Er verändert keine Spielerdaten.
 
 ```bash
