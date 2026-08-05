@@ -1,4 +1,12 @@
-# Kampflabor v1.3
+# Kampflabor v1.4
+
+## Neu in v1.4
+
+- Verbrennung halbiert den Schaden physischer Attacken.
+- Verbrennungsschaden trifft ausschließlich das aktive Pokémon.
+- Einzigartige Antworten auf verbleibende Gegner werden als Winconditions erkannt.
+- Bewusste Opfer sind erlaubt, wenn dadurch eine wichtige Antwort erhalten bleibt.
+- Erzwungene Einwechslungen schützen wertvolle spätere Matchups stärker.
 
 ## Enthalten
 

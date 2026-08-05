@@ -19,4 +19,13 @@ assert.ok(immunity.log.some(entry=>entry.text.includes("Pikachu wird gegen Bisaf
 const fastAttackers=lab.simulate({seed:1004,teamA:["alakazam","jolteon","gengar"],teamB:["charizard","dragonite","machamp"]});
 assert.equal(fastAttackers.log.filter(entry=>entry.turn<=2&&entry.text.includes("Simsala setzt Psychokinese ein")).length,2,"Simsala nutzt freien Schaden gegen Glurak");
 assert.ok(fastAttackers.log.some(entry=>entry.text.includes("Dragoran setzt Erdbeben ein")&&entry.text.includes("sehr effektiv")),"Dragoran erkennt Erdbeben gegen Gengar");
-console.log("Wesen, Kampfphasen, Immunitäten, Wechselkosten und reproduzierbare 3-gegen-3-Simulation: OK");
+const physicalAttacker={level:50,types:["ground"],stats:{attack:150,specialAttack:50},status:null};
+const physicalDefender={types:["normal"],stats:{defense:100,specialDefense:100}};
+const normalEarthquake=lab.expectedDamage(physicalAttacker,physicalDefender,lab.MOVES.earthquake);
+physicalAttacker.status="burned";
+assert.equal(lab.expectedDamage(physicalAttacker,physicalDefender,lab.MOVES.earthquake),Math.floor(normalEarthquake/2),"Verbrennung halbiert physischen Schaden");
+const preserveLapras=lab.simulate({seed:1003,teamA:["pikachu","charizard","lapras"],teamB:["rhydon","gengar","machamp"]});
+assert.ok(preserveLapras.log.some(entry=>entry.text.includes("Lapras wird gegen Pikachu ausgewechselt")&&entry.text.includes("bewusstes Opfer")),"Pikachu wird geopfert, damit Lapras als Antwort auf Rizeros erhalten bleibt");
+const activeBurnOnly=lab.simulate({seed:1006,teamA:["gengar","pikachu","charizard"],teamB:["snorlax","venusaur","blastoise"]});
+assert.ok(!activeBurnOnly.log.some(entry=>entry.turn>=4&&entry.text.includes("Relaxo erleidet")&&entry.text.includes("Verbrennungsschaden")),"Ausgewechselte Pokémon erhalten keinen Verbrennungsschaden");
+console.log("Wesen, Kampfphasen, Immunitäten, Verbrennung, Winconditions und reproduzierbare 3-gegen-3-Simulation: OK");
