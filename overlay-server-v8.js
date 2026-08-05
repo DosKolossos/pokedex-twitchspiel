@@ -131,6 +131,7 @@ app.get("/api/widget/player", (req, res) => {
       party,
       progress: profile?.progress || {},
       items: profile?.items || {},
+      ranked: require("./lib/ranked").publicRank(profiles, userId),
       availableEvolutions,
     },
     dex,

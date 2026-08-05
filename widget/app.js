@@ -392,8 +392,13 @@ function renderHome() {
 
   const greeting = greetings[new Date().getDate() % greetings.length];
   const ranks = state.ranks || {};
+  const ranked = state.player.ranked || state.ranked || {};
+  const rankedHeadline = ranked.placed
+    ? `#${ranked.position} – ${ranked.division} – ${ranked.lp} LP`
+    : `${ranked.division || "Eisen"} – ${Number(ranked.lp || 0)} LP`;
   const rankCard = (label, data) => `<article class="rank-card"><small>${label}</small><strong>${data?.rank ? `#${data.rank}` : "—"}</strong><span>${Number(data?.value || 0)} · von ${Number(data?.total || 0)}</span></article>`;
   view.innerHTML = heading("Willkommen!", `${greeting}, ${state.player.display}!`) +
+    `<article class="ranked-home-card"><small>RANGLISTE</small><strong>${escapeHtml(rankedHeadline)}</strong><span>${ranked.placed ? `${Number(ranked.wins || 0)} Siege · ${Number(ranked.losses || 0)} Niederlagen` : "Noch kein Ranked-Kampf"}</span></article>` +
     (partner ? `<article class="partner-card">
       <span class="partner-label">DEIN PARTNER-POKÉMON</span>
       <div class="partner-visual">${partner.spriteUrl ? `<img src="${escapeHtml(partner.spriteUrl)}" alt="${escapeHtml(monName(partner))}">` : `<div class="partner-placeholder">◓</div>`}</div>
@@ -565,6 +570,7 @@ async function load() {
     if (metaResponse.ok) {
       const meta = await metaResponse.json();
       state.ranks = meta.ranks || {};
+      state.ranked = meta.ranked || state.player.ranked || {};
       state.multiplayer ??= {};
       state.multiplayer.availablePlayers = meta.availablePlayers || [];
     }
