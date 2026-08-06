@@ -1,4 +1,7 @@
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const queue = require("../lib/rankedQueue");
 
 const profile = { party:{ slots:[
@@ -15,4 +18,9 @@ const state = { entries:{ user:{ team:snapshot, joinedAt:123 } } };
 assert.equal(queue.lockedCaughtAt(state,"user",22),true);
 assert.equal(queue.lockedCaughtAt(state,"user",44),false);
 assert.deepEqual(queue.publicEntry(state,"user"),{queued:true,joinedAt:123,team:snapshot});
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pokedex-ranked-clear-"));
+const queueFile = path.join(tempDir, "rankedQueue.json");
+queue.writeQueue(queueFile, { entries:{ user:{ team:snapshot, joinedAt:123 }, other:{ team:[], joinedAt:456 } } });
+assert.equal(queue.clearQueue(queueFile, (file, fallback) => JSON.parse(fs.readFileSync(file, "utf8")) || fallback), 2);
+assert.deepEqual(queue.readQueue(queueFile, (file) => JSON.parse(fs.readFileSync(file, "utf8"))).entries, {});
 console.log("Ranked-Queue, Snapshot und Pokémon-Sperre erfolgreich getestet.");

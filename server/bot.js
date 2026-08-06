@@ -7,6 +7,9 @@ const { TokenManager } = require("./token-manager");
 const { TwitchApi } = require("./twitch-api");
 const { EventSubConnection } = require("./eventsub");
 const { GameAdapter } = require("./game-adapter");
+const store = require("../lib/fileStore");
+const paths = require("../lib/paths");
+const rankedQueue = require("../lib/rankedQueue");
 
 const required = [
   "TWITCH_CLIENT_ID",
@@ -178,6 +181,11 @@ async function setGameEnabled(nextEnabled, options = {}) {
   gameEnabledSource = source;
   persistControlState();
 
+  if (changed) {
+    const removed = rankedQueue.clearQueue(paths.RANKED_QUEUE_JSON, store.readJsonSafe);
+    console.log(`[ranked] Queue wegen Spiel-${gameEnabled ? "Start" : "Stopp"} beendet (${removed} Einträge)`);
+  }
+
   if (gameEnabled) {
     scheduleSpawnResolve();
     scheduleRaidResolve();
@@ -206,6 +214,8 @@ function initializeGameControl() {
   }
 
   persistControlState();
+  const removed = rankedQueue.clearQueue(paths.RANKED_QUEUE_JSON, store.readJsonSafe);
+  console.log(`[ranked] Queue beim Bot-Start bereinigt (${removed} Einträge)`);
   console.log(`[game] Startstatus: ${statusText()}`);
 }
 
