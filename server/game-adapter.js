@@ -1,4 +1,5 @@
 const paths = require("../lib/paths");
+const rankedQueue = require("../lib/rankedQueue");
 const store = require("../lib/fileStore");
 const spawn = require("../lib/spawn");
 const catching = require("../lib/catch");
@@ -169,6 +170,18 @@ class GameAdapter {
       case "raidstatus": {
         const result = raid.writeRaidStatus();
         return { result, message: text(paths.RAID_MESSAGE_TXT) };
+      }
+      case "ranked": {
+        const profiles = store.readJson(paths.PROFILES_JSON, { users: {} }) || { users: {} };
+        const result = rankedQueue.toggleFromChat({
+          filePath: paths.RANKED_QUEUE_JSON,
+          readJsonSafe: store.readJson,
+          profile: profiles.users?.[userId],
+          userId,
+          userName,
+          rawInput,
+        });
+        return { result, message: result.silent ? "" : String(result.message || "") };
       }
       default:
         return { result: { ok: false, reason: "unknown_command" }, message: "" };

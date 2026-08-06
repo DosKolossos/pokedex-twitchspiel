@@ -325,6 +325,7 @@ const aliases = new Map([
   ["decline", "decline"],
   ["cancel", "cancel"],
   ["raid", "raid"],
+  ["ranked", "ranked"],
 ]);
 
 async function handleChatEvent(event) {

@@ -43,10 +43,16 @@ let selectedContext = null;
 let emptySlotMenu = null;
 const greetings = ["Schön, dich zu sehen", "Bereit für ein neues Abenteuer", "Dein Partner wartet schon", "Willkommen zurück"];
 
-const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[char]);
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const monName = (mon) => mon?.displayName || mon?.name || "Unbekannt";
 const monKey = (mon) => mon?.dexId != null ? `dex:${mon.dexId}` : `name:${String(monName(mon)).toLowerCase()}`;
 const caughtKeys = () => new Set((state?.player?.history?.length ? state.player.history : state?.player?.caught || []).map(monKey));
+
+function isRankedLocked(mon) {
+  const queue = state?.player?.rankedQueue || state?.rankedQueue;
+  if (!queue?.queued || !Array.isArray(queue.team)) return false;
+  return queue.team.some((queuedMon) => Number(queuedMon?.caughtAt) === Number(mon?.caughtAt));
+}
 
 function heading(title, subtitle, aside = "") {
   return `<div class="hero"><div><h1>${escapeHtml(title)}</h1>${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}</div>${aside}</div>`;
@@ -66,7 +72,7 @@ const pokemonImage = (mon, className = "") => {
 };
 
 function activePartner() {
-  const party = state?.player?.party || { activeSlot:0, slots:[] };
+  const party = state?.player?.party || { activeSlot: 0, slots: [] };
   const activeSlot = Number(party.activeSlot || 0);
   return party.slots?.[activeSlot] || party.slots?.find(Boolean) || null;
 }
@@ -104,11 +110,11 @@ function rarityClass(rarity) {
 }
 
 const typeDetails = {
-  normal:"Normal", fire:"Feuer", water:"Wasser", electric:"Elektro",
-  grass:"Pflanze", ice:"Eis", fighting:"Kampf", poison:"Gift",
-  ground:"Boden", flying:"Flug", psychic:"Psycho", bug:"Käfer",
-  rock:"Gestein", ghost:"Geist", dragon:"Drache", dark:"Unlicht",
-  steel:"Stahl", fairy:"Fee"
+  normal: "Normal", fire: "Feuer", water: "Wasser", electric: "Elektro",
+  grass: "Pflanze", ice: "Eis", fighting: "Kampf", poison: "Gift",
+  ground: "Boden", flying: "Flug", psychic: "Psycho", bug: "Käfer",
+  rock: "Gestein", ghost: "Geist", dragon: "Drache", dark: "Unlicht",
+  steel: "Stahl", fairy: "Fee"
 };
 const pokemonTypeCache = new Map();
 
@@ -121,26 +127,26 @@ async function ensurePokemonTypes(mon) {
   if (!mon?.dexId || (normalizedTypes(mon).length && mon.baseStats)) return;
   const dexId = Number(mon.dexId);
   if (!pokemonTypeCache.has(dexId)) {
-    pokemonTypeCache.set(dexId, fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`, { cache:"force-cache" })
+    pokemonTypeCache.set(dexId, fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`, { cache: "force-cache" })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("Typen nicht verfügbar")))
-      .then((pokemon) => ({ types:pokemon.types.map((entry) => entry.type.name), baseStats:Object.fromEntries(pokemon.stats.map((entry) => [entry.stat.name, entry.base_stat])) }))
-      .catch(() => ({ types:[], baseStats:null })));
+      .then((pokemon) => ({ types: pokemon.types.map((entry) => entry.type.name), baseStats: Object.fromEntries(pokemon.stats.map((entry) => [entry.stat.name, entry.base_stat])) }))
+      .catch(() => ({ types: [], baseStats: null })));
   }
   const details = await pokemonTypeCache.get(dexId);
   mon.types = details.types;
   mon.baseStats = details.baseStats;
 }
 
-const statLabels = { hp:"KP", attack:"Angriff", defense:"Verteidigung", specialAttack:"Spezial-Angriff", specialDefense:"Spezial-Verteidigung", speed:"Initiative" };
+const statLabels = { hp: "KP", attack: "Angriff", defense: "Verteidigung", specialAttack: "Spezial-Angriff", specialDefense: "Spezial-Verteidigung", speed: "Initiative" };
 function reportNature(mon) {
   const id = String(mon?.nature || "hardy").toLowerCase();
   const nature = window.PokeBattleLab?.NATURES?.[id] || window.PokeBattleLab?.NATURES?.hardy;
-  return { id, name:nature?.[0] || id, up:nature?.[1] || null, down:nature?.[2] || null };
+  return { id, name: nature?.[0] || id, up: nature?.[1] || null, down: nature?.[2] || null };
 }
 function calculatedMonStats(mon, level) {
   if (!mon?.baseStats || !window.PokeBattleLab) return mon?.stats || {};
-  const b=mon.baseStats;
-  return window.PokeBattleLab.stats([b.hp,b.attack,b.defense,b["special-attack"],b["special-defense"],b.speed],level,reportNature(mon).id);
+  const b = mon.baseStats;
+  return window.PokeBattleLab.stats([b.hp, b.attack, b.defense, b["special-attack"], b["special-defense"], b.speed], level, reportNature(mon).id);
 }
 
 function typeMarkup(mon) {
@@ -265,7 +271,7 @@ function reportMarkup(mon) {
     ? `<div class="move-list">${availableMoves.map((move) => `<label><input type="checkbox" data-move-choice ${selectedMoveNames.has(moveName(move)) ? "checked" : ""}><span>${escapeHtml(moveName(move))}</span><small>ab Lv. ${moveLevel(move)}</small></label>`).join("")}</div><p class="report-hint">Bis zu vier Attacken auswählbar. Die Speicherung wird mit dem Kampfsystem aktiviert.</p>`
     : `<p>Noch keine Attacken für dieses Pokémon hinterlegt.</p>`;
   const nextMove = lockedMoves[0];
-  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div><section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><div class="nature-line"><span><small>Wesen</small><strong>${escapeHtml(nature.name)}</strong></span><small>${nature.up ? `${escapeHtml(statLabels[nature.up])} ▲ · ${escapeHtml(statLabels[nature.down])} ▼` : "neutral"}</small></div><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key,value]) => `<div class="stat-line ${nature.up===key?"stat-up":nature.down===key?"stat-down":""}"><span>${escapeHtml(statLabels[key] || key)}</span><b>${escapeHtml(value)}${nature.up===key?" ▲":nature.down===key?" ▼":""}</b></div>`).join("") : `<p>Statuswerte konnten nicht geladen werden.</p>`}</section>`;
+  return `<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="report-head rarity-${rarityClass(mon.rarity)}">${pokemonImage(mon, "report-sprite")}<div><small>Pokémon-Bericht</small><h2>${escapeHtml(monName(mon))}</h2><span>#${escapeHtml(mon.dexId || "—")} · Level ${level}${mon.isShiny ? " · ✨ Shiny" : ""}</span></div></div><div class="report-summary"><div class="xp-card"><div class="xp-label"><small>Fortschritt</small><strong>${level >= 100 ? "Max. Level" : `${currentXp} / ${requiredXp} XP`}</strong></div><div class="xp-track" role="progressbar" aria-label="Erfahrung bis zum nächsten Level" aria-valuemin="0" aria-valuemax="${requiredXp}" aria-valuenow="${currentXp}"><span style="width:${xpPercent}%"></span></div></div>${typeMarkup(mon)}</div><section class="report-section"><details class="move-menu" open><summary><span>Attacken</span><small>${availableMoves.length} verfügbar</small></summary>${moveMenu}${nextMove ? `<p class="next-move">Nächste Attacke auf Lv. ${moveLevel(nextMove)}: ${escapeHtml(moveName(nextMove))}</p>` : ""}</details></section><section class="report-section"><div class="nature-line"><span><small>Wesen</small><strong>${escapeHtml(nature.name)}</strong></span><small>${nature.up ? `${escapeHtml(statLabels[nature.up])} ▲ · ${escapeHtml(statLabels[nature.down])} ▼` : "neutral"}</small></div><h3>Statuswerte</h3>${Object.keys(stats).length ? Object.entries(stats).map(([key, value]) => `<div class="stat-line ${nature.up === key ? "stat-up" : nature.down === key ? "stat-down" : ""}"><span>${escapeHtml(statLabels[key] || key)}</span><b>${escapeHtml(value)}${nature.up === key ? " ▲" : nature.down === key ? " ▼" : ""}</b></div>`).join("") : `<p>Statuswerte konnten nicht geladen werden.</p>`}</section>`;
 }
 
 async function showPokemonReport(mon) {
@@ -281,10 +287,10 @@ async function showPokemonReport(mon) {
 }
 
 async function postAction(action, caughtAt, extra = {}) {
-  const response = await fetch(`${apiBaseUrl}/api/widget/action${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method:"POST", headers:apiHeaders(true), body:JSON.stringify({ action, caughtAt, ...extra }) });
+  const response = await fetch(`${apiBaseUrl}/api/widget/action${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method: "POST", headers: apiHeaders(true), body: JSON.stringify({ action, caughtAt, ...extra }) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.ok) {
-    const messages = { team_full:"Dein Team ist voll.", slot_occupied:"Dieser Teamslot ist inzwischen belegt. Bitte wähle einen anderen.", already_in_team:"Dieses Pokémon ist bereits im Team.", remove_from_team_first:"Lege das Pokémon zuerst auf dem PC ab.", not_enough_items:"Du hast nicht genug davon.", item_not_supported_yet:"Dieser Gegenstand kann hier noch nicht verwendet werden.", no_evolution:"Für dieses Pokémon ist keine Entwicklung verfügbar.", evolution_locked:"Du hast die Entwicklung dieses Pokémon zuvor gesperrt.", evolution_failed:"Die Entwicklung konnte nicht abgeschlossen werden.", ranked_pokemon_locked:"Dieses Pokémon ist für die laufende Ranked-Suche gesperrt." };
+    const messages = { team_full: "Dein Team ist voll.", slot_occupied: "Dieser Teamslot ist inzwischen belegt. Bitte wähle einen anderen.", already_in_team: "Dieses Pokémon ist bereits im Team.", remove_from_team_first: "Lege das Pokémon zuerst auf dem PC ab.", not_enough_items: "Du hast nicht genug davon.", item_not_supported_yet: "Dieser Gegenstand kann hier noch nicht verwendet werden.", no_evolution: "Für dieses Pokémon ist keine Entwicklung verfügbar.", evolution_locked: "Du hast die Entwicklung dieses Pokémon zuvor gesperrt.", evolution_failed: "Die Entwicklung konnte nicht abgeschlossen werden.", ranked_pokemon_locked: "Dieses Pokémon ist für die laufende Ranked-Suche gesperrt." };
     const message = result.error === "evolution_level" ? `Dieses Pokémon kann sich ab Level ${result.requiredLevel} entwickeln.` : messages[result.error];
     throw new Error(message || result.error || "Aktion fehlgeschlagen");
   }
@@ -298,10 +304,11 @@ function showPokemonMenu(mon, context) {
   }
   selectedMon = mon; selectedContext = context;
   const evolution = availableEvolution(mon);
+  const rankedLocked = context === "team" && isRankedLocked(mon);
   const actions = context === "storage"
-    ? [["report","Bericht"], ...(evolution ? [["evolve","Entwickeln"]] : []), ["team_add","Ins Team"],["item","Item verwenden"],["release","Freilassen"]]
-    : [["report","Bericht"], ...(evolution ? [["evolve","Entwickeln"]] : []), ["team_remove","Auf PC ablegen"],["item","Item verwenden"],["team_active","Aktiv setzen"]];
-  const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><div class="menu-mon">${pokemonImage(mon,"menu-sprite")}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${monLevel(mon)}</small></div></div><div class="action-menu">${actions.map(([id,label]) => `<button data-mon-action="${id}" class="${id === "release" ? "danger" : ""}">${label}</button>`).join("")}</div>`);
+    ? [["report", "Bericht"], ...(evolution ? [["evolve", "Entwickeln"]] : []), ["team_add", "Ins Team"], ["item", "Item verwenden"], ["release", "Freilassen"]]
+    : [["report", "Bericht"], ...(evolution ? [["evolve", "Entwickeln"]] : []), ...(!rankedLocked ? [["team_remove", "Auf PC ablegen"], ["item", "Item verwenden"]] : []), ["team_active", "Aktiv setzen"]];
+  const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><div class="menu-mon">${pokemonImage(mon, "menu-sprite")}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${monLevel(mon)}</small></div>${rankedLocked ? '<span class="menu-ranked-lock" title="Für die Ranked-Suche gesperrt">🔒</span>' : ""}</div>${rankedLocked ? '<p class="ranked-menu-note">Während der Ranked-Suche kann dieses Pokémon weder auf dem PC abgelegt noch mit Items verändert werden.</p>' : ""}<div class="action-menu">${actions.map(([id, label]) => `<button data-mon-action="${id}" class="${id === "release" ? "danger" : ""}">${label}</button>`).join("")}</div>`);
   layer.querySelectorAll("[data-mon-action]").forEach((button) => button.addEventListener("click", async () => {
     const action = button.dataset.monAction;
     if (action === "report") {
@@ -311,7 +318,7 @@ function showPokemonMenu(mon, context) {
     }
     if (action === "item") { layer.remove(); showItemPicker(mon); return; }
     if (action === "release") {
-      showConfirmation({ title:`${monName(mon)} freilassen?`, message:"Diese Aktion kann nicht rückgängig gemacht werden.", confirmLabel:"Freilassen", danger:true, onConfirm:() => postAction("release", mon.caughtAt) });
+      showConfirmation({ title: `${monName(mon)} freilassen?`, message: "Diese Aktion kann nicht rückgängig gemacht werden.", confirmLabel: "Freilassen", danger: true, onConfirm: () => postAction("release", mon.caughtAt) });
       return;
     }
     if (action === "evolve") {
@@ -347,8 +354,8 @@ function showEvolutionPreview(mon, evolution) {
 }
 
 function showItemPicker(mon, preselectedItem = "") {
-  const items = Object.entries(state.player.items || {}).filter(([,amount]) => Number(amount) > 0);
-  const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><h2>Auf ${escapeHtml(monName(mon))} anwenden</h2><div class="item-picker">${items.map(([id,amount]) => `<button data-pick-item="${id}" ${preselectedItem && id !== preselectedItem ? "hidden" : ""}><span class="item-icon"><img src="${itemSprite(id)}" alt=""></span><strong>${escapeHtml(({xp_candy_s:"XP-Bonbon S",xp_candy_m:"XP-Bonbon M",xp_candy_l:"XP-Bonbon L"})[id] || id.replaceAll("_"," "))}</strong><small>${amount}×</small></button>`).join("") || "<p>Keine Items vorhanden.</p>"}</div>`);
+  const items = Object.entries(state.player.items || {}).filter(([, amount]) => Number(amount) > 0);
+  const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><h2>Auf ${escapeHtml(monName(mon))} anwenden</h2><div class="item-picker">${items.map(([id, amount]) => `<button data-pick-item="${id}" ${preselectedItem && id !== preselectedItem ? "hidden" : ""}><span class="item-icon"><img src="${itemSprite(id)}" alt=""></span><strong>${escapeHtml(({ xp_candy_s: "XP-Bonbon S", xp_candy_m: "XP-Bonbon M", xp_candy_l: "XP-Bonbon L" })[id] || id.replaceAll("_", " "))}</strong><small>${amount}×</small></button>`).join("") || "<p>Keine Items vorhanden.</p>"}</div>`);
   layer.querySelectorAll("[data-pick-item]").forEach((button) => button.addEventListener("click", () => {
     const id = button.dataset.pickItem;
     const isCandy = id.startsWith("xp_candy_");
@@ -362,7 +369,7 @@ function showItemPicker(mon, preselectedItem = "") {
       const amountInput = card.querySelector("[data-item-amount]");
       const amount = isCandy ? Math.max(1, Math.min(max, Math.floor(Number(amountInput?.value || 1)))) : 1;
       if (amountInput) amountInput.value = amount;
-      try { confirmButton.disabled = true; await postAction("item_use", mon.caughtAt, { itemId:id, amount }); layer.remove(); }
+      try { confirmButton.disabled = true; await postAction("item_use", mon.caughtAt, { itemId: id, amount }); layer.remove(); }
       catch (error) { showNotice(error.message, "Item konnte nicht verwendet werden"); }
     });
   }));
@@ -374,7 +381,7 @@ function bindPcActions() {
   }));
   view.querySelectorAll("[data-item-id]").forEach((button) => button.addEventListener("click", () => {
     const team = (state.player.party?.slots || []).filter(Boolean);
-    const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><h2>Auf Pokémon anwenden</h2><div class="target-grid">${team.map((mon) => `<button data-item-target="${Number(mon.caughtAt)}">${pokemonImage(mon,"target-sprite")}<strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${monLevel(mon)}</small></button>`).join("") || "<p>Dein Team ist leer.</p>"}</div>`);
+    const layer = dialog(`<button class="dialog-close" data-dialog-close>×</button><h2>Auf Pokémon anwenden</h2><div class="target-grid">${team.map((mon) => `<button data-item-target="${Number(mon.caughtAt)}">${pokemonImage(mon, "target-sprite")}<strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${monLevel(mon)}</small></button>`).join("") || "<p>Dein Team ist leer.</p>"}</div>`);
     layer.querySelectorAll("[data-item-target]").forEach((target) => target.addEventListener("click", () => { layer.remove(); showItemPicker(ownedMon(target.dataset.itemTarget), button.dataset.itemId); }));
   }));
   view.querySelectorAll("[data-empty-slot]").forEach((button) => button.addEventListener("click", (event) => {
@@ -434,18 +441,18 @@ function renderStorage() {
 }
 
 function renderTeamSection() {
-  const party = state.player.party || { activeSlot:0, slots:[] };
-  const slots = Array.from({ length:6 }, (_, i) => party.slots?.[i] || null);
-  return `<div class="party">${slots.map((mon, i) => mon ? `<button class="card slot mon-button ${Number(party.activeSlot) === i ? "active" : ""}" data-mon-menu="team" data-caught-at="${Number(mon.caughtAt)}">${Number(party.activeSlot) === i ? '<span class="star" title="Partner-Pokémon">★</span>' : ""}${evolutionReadyMarkup(mon)}${pokemonImage(mon, "team-sprite")}<p class="level">Lv. ${escapeHtml(mon.level || 1)}</p><strong>${escapeHtml(monName(mon))}</strong></button>` : `<button type="button" class="card slot empty-slot" data-empty-slot="${i}" aria-haspopup="menu"><span>Slot ${i + 1} leer</span></button>`).join("")}</div>`;
+  const party = state.player.party || { activeSlot: 0, slots: [] };
+  const slots = Array.from({ length: 6 }, (_, i) => party.slots?.[i] || null);
+  return `<div class="party">${slots.map((mon, i) => mon ? `<button class="card slot mon-button ${Number(party.activeSlot) === i ? "active" : ""} ${isRankedLocked(mon) ? "ranked-locked" : ""}" data-mon-menu="team" data-caught-at="${Number(mon.caughtAt)}" ${isRankedLocked(mon) ? 'aria-label="' + escapeHtml(monName(mon)) + ', für Ranked gesperrt"' : ""}>${Number(party.activeSlot) === i ? '<span class="star" title="Partner-Pokémon">★</span>' : ""}${isRankedLocked(mon) ? '<span class="team-ranked-lock" title="Für die Ranked-Suche gesperrt">🔒</span>' : ""}${evolutionReadyMarkup(mon)}${pokemonImage(mon, "team-sprite")}<p class="level">Lv. ${escapeHtml(mon.level || 1)}</p><strong>${escapeHtml(monName(mon))}</strong></button>` : `<button type="button" class="card slot empty-slot" data-empty-slot="${i}" aria-haspopup="menu"><span>Slot ${i + 1} leer</span></button>`).join("")}</div>`;
 }
 
 function renderItemsSection() {
-  const labels = { fire_stone:"Feuerstein", water_stone:"Wasserstein", thunder_stone:"Donnerstein", leaf_stone:"Blattstein", moon_stone:"Mondstein", xp_candy_s:"XP-Bonbon S", xp_candy_m:"XP-Bonbon M", xp_candy_l:"XP-Bonbon L" };
+  const labels = { fire_stone: "Feuerstein", water_stone: "Wasserstein", thunder_stone: "Donnerstein", leaf_stone: "Blattstein", moon_stone: "Mondstein", xp_candy_s: "XP-Bonbon S", xp_candy_m: "XP-Bonbon M", xp_candy_l: "XP-Bonbon L" };
   return `<div class="list">${Object.entries(labels).map(([id, label]) => `<button class="card row item-row item-button" data-item-id="${id}" ${Number(state.player.items?.[id] || 0) < 1 ? "disabled" : ""}><span class="item-icon"><img src="${itemSprite(id)}" alt="" loading="lazy" onerror="this.hidden=true;this.parentElement.classList.add('fallback')"></span><strong>${label}</strong><span class="amount">${Number(state.player.items?.[id] || 0)}×</span></button>`).join("")}</div>`;
 }
 
 function renderPc() {
-  const content = { storage:renderStorage, team:renderTeamSection, items:renderItemsSection }[pcSection]();
+  const content = { storage: renderStorage, team: renderTeamSection, items: renderItemsSection }[pcSection]();
   view.innerHTML = pcNavigation() + `<section class="pc-content">${content}</section>`;
   view.querySelectorAll("[data-pc-section]").forEach((button) => button.addEventListener("click", () => {
     pcSection = button.dataset.pcSection;
@@ -461,7 +468,7 @@ function renderMulti() {
     ["normal", "◇", "Normaler Kampf", "Direkte Herausforderung · ungewertet"],
     ["trade", "↔", "Tausch", `${state.multiplayer?.trades?.length || 0} offene Vorgänge`],
   ];
-  view.innerHTML = heading("Multiplayer", "Kämpfen oder tauschen") + `<div class="multi-menu">${rows.map(([id,icon,title,subtitle]) => `<button class="card multi-row" data-multi-section="${id}"><span>${icon}</span><div><strong>${title}</strong><small>${subtitle}</small></div><b>›</b></button>`).join("")}</div>`;
+  view.innerHTML = heading("Multiplayer", "Kämpfen oder tauschen") + `<div class="multi-menu">${rows.map(([id, icon, title, subtitle]) => `<button class="card multi-row" data-multi-section="${id}"><span>${icon}</span><div><strong>${title}</strong><small>${subtitle}</small></div><b>›</b></button>`).join("")}</div>`;
   view.querySelectorAll("[data-multi-section]").forEach((button) => button.addEventListener("click", () => {
     if (button.dataset.multiSection === "ranked") { multiSection = "ranked"; renderMulti(); }
     else if (button.dataset.multiSection === "normal") showBattleLab();
@@ -469,19 +476,19 @@ function renderMulti() {
 }
 
 function renderRankedQueue() {
-  const queue = state.player.rankedQueue || state.rankedQueue || { queued:false, team:[] };
+  const queue = state.player.rankedQueue || state.rankedQueue || { queued: false, team: [] };
   const party = (state.player.party?.slots || []).filter(Boolean);
   if (queue.queued) {
     view.innerHTML = `<button class="sub-back" data-multi-back>‹ Multiplayer</button>${heading("Gegnersuche", "Deine Auswahl ist gesperrt")}<div class="queue-team ranked-grid">${queue.team.map((mon, index) => `<article class="card ranked-mon locked"><span class="ranked-order${index === 0 ? " lead" : ""}" title="${index === 0 ? "Lead-Pokémon" : `Position ${index + 1}`}">${index + 1}</span>${pokemonImage(mon)}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${Number(mon.level || 1)}</small></div><span class="ranked-state">🔒</span></article>`).join("")}</div><div class="queue-status"><span class="queue-spinner"></span><strong>Passender Gegner wird gesucht …</strong><small>Pokémon 1 beginnt den Kampf.</small></div><button class="queue-button danger" data-queue-leave>Suche abbrechen</button>`;
   } else {
     rankedSelection = new Set([...rankedSelection].filter((caughtAt) => party.some((mon) => Number(mon.caughtAt) === caughtAt)));
     const selectionOrder = [...rankedSelection];
-    view.innerHTML = `<button class="sub-back" data-multi-back>‹ Multiplayer</button>${heading("Ranked-Kampf", "Wähle genau drei Pokémon", `<span class="selection-count">${rankedSelection.size}/3</span>`)}<div class="queue-team ranked-grid">${party.map((mon) => { const id=Number(mon.caughtAt), order=selectionOrder.indexOf(id) + 1, selected=order > 0; return `<button class="card ranked-mon ${selected ? "selected" : ""}" data-ranked-mon="${id}" aria-pressed="${selected}">${selected ? `<span class="ranked-order${order === 1 ? " lead" : ""}" title="${order === 1 ? "Lead-Pokémon" : `Position ${order}`}">${order}</span>` : ""}${pokemonImage(mon)}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${Number(mon.level || 1)}</small></div><span class="ranked-state">${selected ? "✓" : ""}</span></button>`; }).join("") || `<div class="empty">Lege zuerst mindestens drei Pokémon in dein Team.</div>`}</div><p class="ranked-lock-note">Pokémon <b>1</b> leadet. Die Auswahl wird in der Queue gesperrt.</p><button class="queue-button" data-queue-join ${rankedSelection.size === 3 ? "" : "disabled"}>Suche starten</button>`;
+    view.innerHTML = `<button class="sub-back" data-multi-back>‹ Multiplayer</button>${heading("Ranked-Kampf", "Wähle genau drei Pokémon", `<span class="selection-count">${rankedSelection.size}/3</span>`)}<div class="queue-team ranked-grid">${party.map((mon) => { const id = Number(mon.caughtAt), order = selectionOrder.indexOf(id) + 1, selected = order > 0; return `<button class="card ranked-mon ${selected ? "selected" : ""}" data-ranked-mon="${id}" aria-pressed="${selected}">${selected ? `<span class="ranked-order${order === 1 ? " lead" : ""}" title="${order === 1 ? "Lead-Pokémon" : `Position ${order}`}">${order}</span>` : ""}${pokemonImage(mon)}<div class="ranked-name-level"><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${Number(mon.level || 1)}</small></div><span class="ranked-state">${selected ? "✓" : ""}</span></button>`; }).join("") || `<div class="empty">Lege zuerst mindestens drei Pokémon in dein Team.</div>`}</div><p class="ranked-lock-note">Pokémon <b>1</b> leadet. Die Auswahl wird in der Queue gesperrt.</p><button class="queue-button" data-queue-join ${rankedSelection.size === 3 ? "" : "disabled"}>Suche starten</button>`;
   }
-  view.querySelector("[data-multi-back]")?.addEventListener("click", () => { multiSection="menu"; renderMulti(); });
+  view.querySelector("[data-multi-back]")?.addEventListener("click", () => { multiSection = "menu"; renderMulti(); });
   view.querySelectorAll("[data-ranked-mon]").forEach((button) => button.addEventListener("click", () => {
-    const id=Number(button.dataset.rankedMon);
-    if(rankedSelection.has(id)) rankedSelection.delete(id); else if(rankedSelection.size<3) rankedSelection.add(id);
+    const id = Number(button.dataset.rankedMon);
+    if (rankedSelection.has(id)) rankedSelection.delete(id); else if (rankedSelection.size < 3) rankedSelection.add(id);
     renderRankedQueue();
   }));
   view.querySelector("[data-queue-join]")?.addEventListener("click", () => changeRankedQueue("join"));
@@ -489,19 +496,19 @@ function renderRankedQueue() {
 }
 
 async function changeRankedQueue(intent) {
-  const response = await fetch(`${apiBaseUrl}/api/widget/ranked/queue${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method:"POST", headers:apiHeaders(true), body:JSON.stringify({ intent, caughtAts:[...rankedSelection] }) });
+  const response = await fetch(`${apiBaseUrl}/api/widget/ranked/queue${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method: "POST", headers: apiHeaders(true), body: JSON.stringify({ intent, caughtAts: [...rankedSelection] }) });
   const result = await response.json();
-  if(!response.ok) return alert(result.error === "team_changed" ? "Dein Team hat sich geändert. Bitte neu auswählen." : "Die Warteschlange konnte nicht aktualisiert werden.");
+  if (!response.ok) return alert(result.error === "team_changed" ? "Dein Team hat sich geändert. Bitte neu auswählen." : "Die Warteschlange konnte nicht aktualisiert werden.");
   state.player.rankedQueue = result.rankedQueue;
-  if(intent === "leave") rankedSelection.clear();
+  if (intent === "leave") rankedSelection.clear();
   renderRankedQueue();
 }
 
 function showBattleLab() {
-  const result = window.PokeBattleLab.simulate({ seed:Math.floor(Math.random()*999999)+1 });
-  const teamMarkup = result.state.map((side,index) => `<section class="battle-team"><h3>${escapeHtml(side.name)}${result.winner===index?" 🏆":""}</h3><div>${side.team.map((mon) => `<article><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mon.dexId}.png" alt=""><span><strong>${escapeHtml(mon.name)}</strong><small>${escapeHtml(window.PokeBattleLab.NATURES[mon.nature][0])} · ${mon.hp}/${mon.stats.hp} KP</small></span></article>`).join("")}</div></section>`).join("");
-  const layer = dialog(`<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="battle-lab"><small class="evolution-eyebrow">ISOLIERTER TESTMODUS</small><h2>3-gegen-3-Kampflabor</h2><p>Seed ${result.seed} · keine Spielerdaten werden verändert</p><div class="battle-teams">${teamMarkup}</div><details open><summary>Kampfprotokoll (${result.log.filter(x=>/^Zug/.test(x.text)).length} Züge)</summary><div class="battle-log">${result.log.map((entry) => `<p class="${/^Zug/.test(entry.text)?"turn":""}">${escapeHtml(entry.text)}</p>`).join("")}</div></details><button class="dialog-primary" data-battle-again>Neu simulieren</button></div>`);
-  layer.querySelector("[data-battle-again]").addEventListener("click",()=>{layer.remove();showBattleLab();});
+  const result = window.PokeBattleLab.simulate({ seed: Math.floor(Math.random() * 999999) + 1 });
+  const teamMarkup = result.state.map((side, index) => `<section class="battle-team"><h3>${escapeHtml(side.name)}${result.winner === index ? " 🏆" : ""}</h3><div>${side.team.map((mon) => `<article><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mon.dexId}.png" alt=""><span><strong>${escapeHtml(mon.name)}</strong><small>${escapeHtml(window.PokeBattleLab.NATURES[mon.nature][0])} · ${mon.hp}/${mon.stats.hp} KP</small></span></article>`).join("")}</div></section>`).join("");
+  const layer = dialog(`<button class="dialog-close" data-dialog-close aria-label="Schließen">×</button><div class="battle-lab"><small class="evolution-eyebrow">ISOLIERTER TESTMODUS</small><h2>3-gegen-3-Kampflabor</h2><p>Seed ${result.seed} · keine Spielerdaten werden verändert</p><div class="battle-teams">${teamMarkup}</div><details open><summary>Kampfprotokoll (${result.log.filter(x => /^Zug/.test(x.text)).length} Züge)</summary><div class="battle-log">${result.log.map((entry) => `<p class="${/^Zug/.test(entry.text) ? "turn" : ""}">${escapeHtml(entry.text)}</p>`).join("")}</div></details><button class="dialog-primary" data-battle-again>Neu simulieren</button></div>`);
+  layer.querySelector("[data-battle-again]").addEventListener("click", () => { layer.remove(); showBattleLab(); });
 }
 
 function renderRanks() {
@@ -516,12 +523,12 @@ function eventTimestamp(event) {
 
 function formatEventDate(timestamp) {
   if (!timestamp) return "Datum unbekannt";
-  return new Intl.DateTimeFormat("de-DE", { dateStyle:"medium", timeStyle:"short" }).format(new Date(timestamp));
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(timestamp));
 }
 
 function renderHistory() {
   const catches = (state.player.history?.length ? state.player.history : state.player.caught || [])
-    .map((mon) => ({ type:"Fang", timestamp:eventTimestamp(mon), mon }))
+    .map((mon) => ({ type: "Fang", timestamp: eventTimestamp(mon), mon }))
     .sort((a, b) => b.timestamp - a.timestamp);
   const tabs = [["all", "Alle"], ["catch", "Fänge"], ["trade", "Tausche"], ["battle", "Kämpfe"]];
   const visibleEvents = ["all", "catch"].includes(historyFilter) ? catches : [];
@@ -586,7 +593,7 @@ function toggleTopOverlay(type) {
 function render() {
   view.classList.toggle("home-view", page === "home");
   document.querySelectorAll(".tabs button").forEach((button) => button.classList.toggle("active", button.dataset.page === page));
-  ({ home:renderHome, dex:renderDex, pc:renderPc, multi:renderMulti, history:renderHistory }[page] || renderHome)();
+  ({ home: renderHome, dex: renderDex, pc: renderPc, multi: renderMulti, history: renderHistory }[page] || renderHome)();
 }
 
 async function load() {
@@ -597,12 +604,12 @@ async function load() {
   try {
     const response = await fetch(
       `${apiBaseUrl}/api/widget/player${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`,
-      { cache:"no-store", headers:apiHeaders() }
+      { cache: "no-store", headers: apiHeaders() }
     );
     state = await response.json();
     if (state.error === "identity_link_required") return showIdentityLink();
     if (!response.ok || !state.ok) throw new Error(state.error || "Laden fehlgeschlagen");
-    const metaResponse = await fetch(`${apiBaseUrl}/api/widget/meta${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { cache:"no-store", headers:apiHeaders() });
+    const metaResponse = await fetch(`${apiBaseUrl}/api/widget/meta${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { cache: "no-store", headers: apiHeaders() });
     if (metaResponse.ok) {
       const meta = await metaResponse.json();
       state.ranks = meta.ranks || {};

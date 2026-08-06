@@ -15,6 +15,7 @@
     "test:battle": "node scripts/test-battle-lab.js",
     "test:ranked": "node scripts/test-ranked.js",
     "test:ranked-queue": "node scripts/test-ranked-queue.js",
+    "test:ranked-chat": "node scripts/test-ranked-chat.js",
     "analyze:battles": "node scripts/analyze-ten-battles.js",
     "sprites:battle": "node scripts/download-battle-sprites.js",
     "assign:natures": "node scripts/assign-natures.js",
