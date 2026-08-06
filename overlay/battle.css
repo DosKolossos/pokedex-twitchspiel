@@ -5,6 +5,12 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 .battle:before{content:"";position:absolute;inset:0;opacity:.18;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,#000,transparent 82%)}
 .arena-glow{position:absolute;left:180px;right:180px;bottom:54px;height:300px;border-radius:50%;background:radial-gradient(ellipse,rgba(50,140,255,.16),transparent 65%)}
 
+.trainer-label{position:absolute;z-index:22;top:39px;width:118px;padding:9px 10px;border:1px solid rgba(99,200,255,.3);border-radius:12px;background:rgba(8,18,31,.9);box-shadow:0 8px 22px rgba(0,0,0,.28);overflow:hidden}
+.trainer-label-left{left:17px;text-align:left}
+.trainer-label-right{right:17px;text-align:right}
+.trainer-label small{display:block;margin-bottom:2px;color:#73ceff;font-size:9px;font-weight:950;letter-spacing:1.2px}
+.trainer-label strong{display:block;overflow:hidden;color:#fff;font-size:14px;line-height:1.15;text-overflow:ellipsis;white-space:nowrap}
+
 .team-rail{position:absolute;top:112px;z-index:20;display:grid;gap:13px}
 .team-rail-left{left:26px}
 .team-rail-right{right:26px}
@@ -17,7 +23,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 .hp-panel-enemy{left:145px;top:60px}
 .hp-panel-player{right:145px;bottom:108px}
 .hp-heading,.status-line{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.hp-heading strong{font-size:27px}
+.hp-heading strong{min-width:0;overflow:hidden;font-size:27px;text-overflow:ellipsis;white-space:nowrap}
 .hp-heading span{color:#bfd0e4;font-weight:800}
 .status-line{min-height:27px;margin-top:2px}
 .status{padding:3px 9px;border-radius:7px;font-size:13px;font-weight:950;letter-spacing:.8px;background:#d06027}

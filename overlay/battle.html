@@ -9,15 +9,18 @@
 <body>
   <main id="battle" class="battle" aria-live="polite">
     <div class="arena-glow"></div>
+    <div id="trainerLeft" class="trainer-label trainer-label-left"><small>TEAM VON</small><strong>Team Blau</strong></div>
+    <div id="trainerRight" class="trainer-label trainer-label-right"><small>TEAM VON</small><strong>Team Rot</strong></div>
     <div id="teamLeft" class="team-rail team-rail-left"></div>
     <div id="teamRight" class="team-rail team-rail-right"></div>
     <section id="enemyPanel" class="hp-panel hp-panel-enemy">
-      <div class="hp-heading"><strong data-name>Pokémon</strong><span>Lv. 50</span></div>
+      <div class="hp-heading"><strong data-name>Pokémon</strong><span data-level>Lv. 1</span></div>
       <div class="status-line"><span class="status" data-status hidden></span><span class="hp-percent" data-percent>100 %</span></div>
       <div class="hp-track"><div class="hp-fill" data-fill></div></div>
+      <div class="exact-hp" data-exact>0 / 0 KP</div>
     </section>
     <section id="playerPanel" class="hp-panel hp-panel-player">
-      <div class="hp-heading"><strong data-name>Pokémon</strong><span>Lv. 50</span></div>
+      <div class="hp-heading"><strong data-name>Pokémon</strong><span data-level>Lv. 1</span></div>
       <div class="status-line"><span class="status" data-status hidden></span><span class="hp-percent" data-percent>100 %</span></div>
       <div class="hp-track"><div class="hp-fill" data-fill></div></div>
       <div class="exact-hp" data-exact>0 / 0 KP</div>
