@@ -10,6 +10,7 @@ const { GameAdapter } = require("./game-adapter");
 const store = require("../lib/fileStore");
 const paths = require("../lib/paths");
 const rankedQueue = require("../lib/rankedQueue");
+const rankedBattleQueue = require("../lib/rankedBattleQueue");
 
 const required = [
   "TWITCH_CLIENT_ID",
@@ -183,6 +184,7 @@ async function setGameEnabled(nextEnabled, options = {}) {
 
   if (changed) {
     const removed = rankedQueue.clearQueue(paths.RANKED_QUEUE_JSON, store.readJsonSafe);
+    rankedBattleQueue.clear(paths.RANKED_BATTLE_JSON);
     console.log(`[ranked] Queue wegen Spiel-${gameEnabled ? "Start" : "Stopp"} beendet (${removed} Einträge)`);
   }
 
@@ -215,6 +217,7 @@ function initializeGameControl() {
 
   persistControlState();
   const removed = rankedQueue.clearQueue(paths.RANKED_QUEUE_JSON, store.readJsonSafe);
+  rankedBattleQueue.clear(paths.RANKED_BATTLE_JSON);
   console.log(`[ranked] Queue beim Bot-Start bereinigt (${removed} Einträge)`);
   console.log(`[game] Startstatus: ${statusText()}`);
 }

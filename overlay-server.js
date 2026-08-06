@@ -4,6 +4,9 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const paths = require("./lib/paths");
+const rankedBattleQueue = require("./lib/rankedBattleQueue");
+const rankedMatchmaker = require("./lib/rankedMatchmaker");
+const rankedQueue = require("./lib/rankedQueue");
 
 const app = express();
 const BASE = __dirname;
@@ -32,6 +35,7 @@ function readJsonSafe(filePath, fallback) {
 }
 
 app.disable("x-powered-by");
+app.use(express.json({ limit: "32kb" }));
 app.use(express.static(OVERLAY_DIR, { etag: false, maxAge: 0 }));
 if (fs.existsSync(WIDGET_DIR)) {
   app.use("/widget", express.static(WIDGET_DIR, { etag: false, maxAge: 0 }));
@@ -51,7 +55,27 @@ app.get("/api/raid", (_req, res) => {
 
 app.get("/api/ranked-battle", (_req, res) => {
   setNoCache(res);
-  res.json(readJsonSafe(paths.RANKED_BATTLE_JSON, { id:null, players:[], simulation:null }));
+  res.json(rankedBattleQueue.claimNext(paths.RANKED_BATTLE_JSON, readJsonSafe));
+});
+
+app.post("/api/ranked-battle/:id/complete", (req, res) => {
+  setNoCache(res);
+  const result = rankedBattleQueue.complete(paths.RANKED_BATTLE_JSON, readJsonSafe, req.params.id);
+  if (!result.ok) return res.status(result.reason === "not_found" ? 404 : 409).json(result);
+  if (!result.alreadyCompleted) {
+    const job = result.job;
+    const profiles = readJsonSafe(paths.PROFILES_JSON, { users: {} });
+    rankedMatchmaker.finalize(job, profiles);
+    fs.writeFileSync(paths.PROFILES_JSON, JSON.stringify(profiles, null, 2));
+    const queue = rankedQueue.readQueue(paths.RANKED_QUEUE_JSON, readJsonSafe);
+    for (const player of job.players || []) delete queue.entries[String(player.userId)];
+    rankedQueue.writeQueue(paths.RANKED_QUEUE_JSON, queue);
+    const outbox = readJsonSafe(paths.CHAT_OUTBOX_JSON, { messages: [] });
+    outbox.messages = Array.isArray(outbox.messages) ? outbox.messages : [];
+    outbox.messages.push({ message:`⚔️ ${job.winnerDisplay} gewinnt den Ranked-Kampf (+20 LP).`, createdAt:Date.now(), rankedBattleId:job.id });
+    fs.writeFileSync(paths.CHAT_OUTBOX_JSON, JSON.stringify(outbox, null, 2));
+  }
+  res.json({ ok:true, alreadyCompleted:result.alreadyCompleted });
 });
 
 // Lokale Entwicklungsroute für das Twitch-Widget. Vor einer öffentlichen

@@ -1,6 +1,7 @@
 const paths = require("../lib/paths");
 const rankedQueue = require("../lib/rankedQueue");
 const rankedMatchmaker = require("../lib/rankedMatchmaker");
+const rankedBattleQueue = require("../lib/rankedBattleQueue");
 const store = require("../lib/fileStore");
 const spawn = require("../lib/spawn");
 const catching = require("../lib/catch");
@@ -187,10 +188,9 @@ class GameAdapter {
           const match = rankedMatchmaker.startIfReady({ queue, joiningUserId:userId, profiles });
           if (match) {
             rankedQueue.writeQueue(paths.RANKED_QUEUE_JSON, queue);
-            store.writeJson(paths.PROFILES_JSON, profiles);
-            store.writeJson(paths.RANKED_BATTLE_JSON, match);
+            rankedBattleQueue.enqueue(paths.RANKED_BATTLE_JSON, store.readJson, match);
             result.match = match;
-            result.message = `⚔️ ${match.players[0].display} trifft im Ranked-Kampf auf ${match.players[1].display}! ${match.winnerDisplay} gewinnt (+20 LP).`;
+            result.message = `⚔️ ${match.players[0].display} trifft im Ranked-Kampf auf ${match.players[1].display}! Der Kampf geht ins Overlay.`;
           }
         }
         return { result, message: result.silent ? "" : String(result.message || "") };
