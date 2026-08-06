@@ -35,6 +35,20 @@ result = rankedQueue.toggleFromChat({ filePath:queueFile, readJsonSafe, profile,
 assert.equal(result.action, "leave");
 assert.equal(rankedQueue.publicEntry(rankedQueue.readQueue(queueFile, readJsonSafe), "1").queued, false);
 
+// Some bot paths pass only the command name or only its argument. A plain
+// !ranked must remain a toggle regardless of that transport detail.
+rankedQueue.resetCommandCooldownsForTests();
+result = rankedQueue.toggleFromChat({ filePath:queueFile, readJsonSafe, profile, userId:"1", userName:"Tester", rawInput:"ranked", now:122000 });
+assert.equal(result.action, "join");
+
+rankedQueue.resetCommandCooldownsForTests();
+result = rankedQueue.toggleFromChat({ filePath:queueFile, readJsonSafe, profile, userId:"1", userName:"Tester", rawInput:"", now:133000 });
+assert.equal(result.action, "leave");
+
+rankedQueue.resetCommandCooldownsForTests();
+result = rankedQueue.toggleFromChat({ filePath:queueFile, readJsonSafe, profile, userId:"1", userName:"Tester", rawInput:"ranked stop", now:144000 });
+assert.equal(result.action, "none");
+
 rankedQueue.resetCommandCooldownsForTests();
 result = rankedQueue.toggleFromChat({ filePath:queueFile, readJsonSafe, profile:{ party:{ slots:[{caughtAt:1},{caughtAt:2}] } }, userId:"2", userName:"Klein", rawInput:"!ranked", now:200000 });
 assert.equal(result.reason, "not_enough_team_pokemon");
