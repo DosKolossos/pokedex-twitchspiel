@@ -71,6 +71,7 @@ app.get("/api/widget/player", (req, res) => {
   const dexmap = readJsonSafe(paths.DEXMAP_JSON, {});
   const evolutionRules = readJsonSafe(paths.EVOLUTIONS_JSON, { byDexId: {} });
   const raid = readJsonSafe(paths.RAID_STATE_JSON, { current: null });
+  const rankedQueue = require("./lib/rankedQueue").readQueue(paths.RANKED_QUEUE_JSON, readJsonSafe);
 
   const dexUser = pokedex.users?.[userId] || null;
   const profile = profiles.users?.[userId] || null;
@@ -132,6 +133,7 @@ app.get("/api/widget/player", (req, res) => {
       progress: profile?.progress || {},
       items: profile?.items || {},
       ranked: require("./lib/ranked").publicRank(profiles, userId),
+      rankedQueue: require("./lib/rankedQueue").publicEntry(rankedQueue, userId),
       availableEvolutions,
     },
     dex,

@@ -6,11 +6,14 @@ const requiredFiles = [
   "server/bot.js",
   "server/game-adapter.js",
   "overlay-server.js",
+  "overlay-server-v8.js",
+  "lib/rankedQueue.js",
   "ecosystem.config.cjs",
   "data/pokedex.json",
   "data/profiles.json",
   "data/spawn.json",
   "data/raidState.json",
+  "data/rankedQueue.json",
   "overlay/index.html",
 ];
 let failed = false;

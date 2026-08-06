@@ -35,6 +35,8 @@ let state = null;
 let page = "home";
 let pcSection = "storage";
 let historyFilter = "all";
+let multiSection = "menu";
+let rankedSelection = new Set();
 let openOverlay = null;
 let selectedMon = null;
 let selectedContext = null;
@@ -282,7 +284,7 @@ async function postAction(action, caughtAt, extra = {}) {
   const response = await fetch(`${apiBaseUrl}/api/widget/action${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method:"POST", headers:apiHeaders(true), body:JSON.stringify({ action, caughtAt, ...extra }) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.ok) {
-    const messages = { team_full:"Dein Team ist voll.", slot_occupied:"Dieser Teamslot ist inzwischen belegt. Bitte wähle einen anderen.", already_in_team:"Dieses Pokémon ist bereits im Team.", remove_from_team_first:"Lege das Pokémon zuerst auf dem PC ab.", not_enough_items:"Du hast nicht genug davon.", item_not_supported_yet:"Dieser Gegenstand kann hier noch nicht verwendet werden.", no_evolution:"Für dieses Pokémon ist keine Entwicklung verfügbar.", evolution_locked:"Du hast die Entwicklung dieses Pokémon zuvor gesperrt.", evolution_failed:"Die Entwicklung konnte nicht abgeschlossen werden." };
+    const messages = { team_full:"Dein Team ist voll.", slot_occupied:"Dieser Teamslot ist inzwischen belegt. Bitte wähle einen anderen.", already_in_team:"Dieses Pokémon ist bereits im Team.", remove_from_team_first:"Lege das Pokémon zuerst auf dem PC ab.", not_enough_items:"Du hast nicht genug davon.", item_not_supported_yet:"Dieser Gegenstand kann hier noch nicht verwendet werden.", no_evolution:"Für dieses Pokémon ist keine Entwicklung verfügbar.", evolution_locked:"Du hast die Entwicklung dieses Pokémon zuvor gesperrt.", evolution_failed:"Die Entwicklung konnte nicht abgeschlossen werden.", ranked_pokemon_locked:"Dieses Pokémon ist für die laufende Ranked-Suche gesperrt." };
     const message = result.error === "evolution_level" ? `Dieses Pokémon kann sich ab Level ${result.requiredLevel} entwickeln.` : messages[result.error];
     throw new Error(message || result.error || "Aktion fehlgeschlagen");
   }
@@ -453,10 +455,45 @@ function renderPc() {
 }
 
 function renderMulti() {
-  const raid = state.multiplayer?.raid;
-  const players = state.multiplayer?.availablePlayers || [];
-  view.innerHTML = heading("Multiplayer", "Nur mit Personen aus dem aktuellen Chat") + `<div class="action-grid"><button class="card action"><span>🔄</span><strong>Tausch</strong><p class="muted">${state.multiplayer?.trades?.length || 0} offene Vorgänge</p></button><button class="card action"><span>🐲</span><strong>Raid</strong><p class="muted">${raid ? "Ein Raid ist aktiv" : "Aktuell kein Raid"}</p></button><button class="card action battle-lab-button" data-battle-lab><span>⚔️</span><strong>Kampflabor</strong><p class="muted">3 gegen 3 · Testmodus</p></button></div><section class="chat-players"><h2>Im Chat verfügbar</h2>${players.length ? players.map((player) => `<span>@${escapeHtml(player.display)}</span>`).join("") : `<p>Aktuell wurde niemand Weiteres im Chat gesehen.</p>`}</section>`;
-  view.querySelector("[data-battle-lab]")?.addEventListener("click", showBattleLab);
+  if (multiSection === "ranked") return renderRankedQueue();
+  const rows = [
+    ["ranked", "⚔", "Ranked-Kampf", "3 Pokémon · Ranglistenpunkte"],
+    ["normal", "◇", "Normaler Kampf", "Direkte Herausforderung · ungewertet"],
+    ["trade", "↔", "Tausch", `${state.multiplayer?.trades?.length || 0} offene Vorgänge`],
+  ];
+  view.innerHTML = heading("Multiplayer", "Kämpfen oder tauschen") + `<div class="multi-menu">${rows.map(([id,icon,title,subtitle]) => `<button class="card multi-row" data-multi-section="${id}"><span>${icon}</span><div><strong>${title}</strong><small>${subtitle}</small></div><b>›</b></button>`).join("")}</div>`;
+  view.querySelectorAll("[data-multi-section]").forEach((button) => button.addEventListener("click", () => {
+    if (button.dataset.multiSection === "ranked") { multiSection = "ranked"; renderMulti(); }
+    else if (button.dataset.multiSection === "normal") showBattleLab();
+  }));
+}
+
+function renderRankedQueue() {
+  const queue = state.player.rankedQueue || state.rankedQueue || { queued:false, team:[] };
+  const party = (state.player.party?.slots || []).filter(Boolean);
+  if (queue.queued) {
+    view.innerHTML = `<button class="sub-back" data-multi-back>‹ Multiplayer</button>${heading("Gegnersuche", "Deine Auswahl ist gesperrt")}<div class="queue-team">${queue.team.map((mon) => `<article class="card ranked-mon locked">${pokemonImage(mon)}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${Number(mon.level || 1)}</small></div><span>🔒</span></article>`).join("")}</div><div class="queue-status"><span class="queue-spinner"></span><strong>Passender Gegner wird gesucht …</strong><small>Fangen und andere Aktivitäten bleiben möglich.</small></div><button class="queue-button danger" data-queue-leave>Suche abbrechen</button>`;
+  } else {
+    rankedSelection = new Set([...rankedSelection].filter((caughtAt) => party.some((mon) => Number(mon.caughtAt) === caughtAt)));
+    view.innerHTML = `<button class="sub-back" data-multi-back>‹ Multiplayer</button>${heading("Ranked-Kampf", "Wähle genau drei Pokémon", `<span class="selection-count">${rankedSelection.size}/3</span>`)}<div class="queue-team">${party.map((mon) => { const id=Number(mon.caughtAt), selected=rankedSelection.has(id); return `<button class="card ranked-mon ${selected ? "selected" : ""}" data-ranked-mon="${id}">${pokemonImage(mon)}<div><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${Number(mon.level || 1)}</small></div><span>${selected ? "✓" : ""}</span></button>`; }).join("") || `<div class="empty">Lege zuerst mindestens drei Pokémon in dein Team.</div>`}</div><p class="ranked-lock-note">🔒 In der Queue werden diese drei Pokémon als Snapshot gesperrt.</p><button class="queue-button" data-queue-join ${rankedSelection.size === 3 ? "" : "disabled"}>Suche starten</button>`;
+  }
+  view.querySelector("[data-multi-back]")?.addEventListener("click", () => { multiSection="menu"; renderMulti(); });
+  view.querySelectorAll("[data-ranked-mon]").forEach((button) => button.addEventListener("click", () => {
+    const id=Number(button.dataset.rankedMon);
+    if(rankedSelection.has(id)) rankedSelection.delete(id); else if(rankedSelection.size<3) rankedSelection.add(id);
+    renderRankedQueue();
+  }));
+  view.querySelector("[data-queue-join]")?.addEventListener("click", () => changeRankedQueue("join"));
+  view.querySelector("[data-queue-leave]")?.addEventListener("click", () => changeRankedQueue("leave"));
+}
+
+async function changeRankedQueue(intent) {
+  const response = await fetch(`${apiBaseUrl}/api/widget/ranked/queue${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method:"POST", headers:apiHeaders(true), body:JSON.stringify({ intent, caughtAts:[...rankedSelection] }) });
+  const result = await response.json();
+  if(!response.ok) return alert(result.error === "team_changed" ? "Dein Team hat sich geändert. Bitte neu auswählen." : "Die Warteschlange konnte nicht aktualisiert werden.");
+  state.player.rankedQueue = result.rankedQueue;
+  if(intent === "leave") rankedSelection.clear();
+  renderRankedQueue();
 }
 
 function showBattleLab() {
@@ -569,6 +606,7 @@ async function load() {
       const meta = await metaResponse.json();
       state.ranks = meta.ranks || {};
       state.ranked = meta.ranked || state.player.ranked || {};
+      state.rankedQueue = meta.rankedQueue || state.player.rankedQueue || {};
       state.multiplayer ??= {};
       state.multiplayer.availablePlayers = meta.availablePlayers || [];
     }
