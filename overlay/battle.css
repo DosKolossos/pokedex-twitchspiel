@@ -20,8 +20,8 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 .team-slot img{width:68px;height:68px;object-fit:contain;image-rendering:pixelated}
 
 .hp-panel{position:absolute;z-index:18;width:360px;padding:11px 17px 13px;border:2px solid rgba(255,255,255,.16);border-radius:16px;background:linear-gradient(155deg,rgba(28,42,61,.95),rgba(12,21,34,.95));box-shadow:0 13px 30px rgba(0,0,0,.34),inset 0 1px rgba(255,255,255,.05)}
-.hp-panel-enemy{left:132px;top:105px}
-.hp-panel-player{right:132px;bottom:100px}
+.hp-panel-enemy{right:132px;top:105px}
+.hp-panel-player{left:132px;bottom:100px}
 .hp-heading,.status-line{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .hp-heading strong{min-width:0;overflow:hidden;font-size:25px;text-overflow:ellipsis;white-space:nowrap}
 .hp-heading span{color:#bfd0e4;font-size:16px;font-weight:850}
