@@ -373,6 +373,7 @@ async function handleChatEvent(event) {
   if (adminCommands.has(command) && !isAdmin(event)) return;
 
   if (command === "spawn") rawInput = parsed.raw;
+  if (command === "ranked") rawInput = parsed.args;
   const output = await game.command(command, user, rawInput);
   if (output.message) await sendChat(output.message);
   if (output.schedule === "spawn") scheduleSpawnResolve();
