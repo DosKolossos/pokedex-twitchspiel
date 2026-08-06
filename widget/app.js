@@ -387,24 +387,21 @@ function bindPcActions() {
 
 function renderHome() {
   const partner = activePartner();
-  const caught = state.player.caught?.length || 0;
   const discovered = caughtKeys().size;
+  const dexTotal = state.dex?.length || 151;
 
   const greeting = greetings[new Date().getDate() % greetings.length];
-  const ranks = state.ranks || {};
   const ranked = state.player.ranked || state.ranked || {};
   const rankedHeadline = ranked.placed
     ? `#${ranked.position} – ${ranked.division} – ${ranked.lp} LP`
     : `${ranked.division || "Eisen"} – ${Number(ranked.lp || 0)} LP`;
-  const rankCard = (label, data) => `<article class="rank-card"><small>${label}</small><strong>${data?.rank ? `#${data.rank}` : "—"}</strong><span>${Number(data?.value || 0)} · von ${Number(data?.total || 0)}</span></article>`;
   view.innerHTML = heading("Willkommen!", `${greeting}, ${state.player.display}!`) +
-    `<article class="ranked-home-card"><small>RANGLISTE</small><strong>${escapeHtml(rankedHeadline)}</strong><span>${ranked.placed ? `${Number(ranked.wins || 0)} Siege · ${Number(ranked.losses || 0)} Niederlagen` : "Noch kein Ranked-Kampf"}</span></article>` +
     (partner ? `<article class="partner-card">
       <span class="partner-label">DEIN PARTNER-POKÉMON</span>
       <div class="partner-visual">${partner.spriteUrl ? `<img src="${escapeHtml(partner.spriteUrl)}" alt="${escapeHtml(monName(partner))}">` : `<div class="partner-placeholder">◓</div>`}</div>
       <div class="partner-info"><div><strong>${escapeHtml(monName(partner))}</strong><small>${partner.isShiny ? "✨ Shiny · " : ""}Aktiver Begleiter</small></div><b>Lv. ${escapeHtml(partner.level || 1)}</b></div>
     </article>` : `<article class="card partner-empty"><div class="partner-placeholder">◓</div><strong>Noch kein Partner gewählt</strong><p class="muted">Wähle im Team einen aktiven Begleiter aus.</p></article>`) +
-    `<div class="home-stats"><article class="card"><strong>${discovered}</strong><small>entdeckt</small></article><article class="card"><strong>${caught}</strong><small>im Besitz</small></article><article class="card"><strong>${(state.player.party?.slots || []).filter(Boolean).length}/6</strong><small>im Team</small></article></div><section class="rank-section"><h2>Deine Ränge</h2><div class="rank-grid">${rankCard("Fänge", ranks.catches)}${rankCard("Verschiedene", ranks.distinct)}${rankCard("PvP-Kämpfe", ranks.battles)}</div></section>`;
+    `<div class="home-summary"><article class="home-summary-card ranked-summary"><small>RANGLISTE</small><strong>${escapeHtml(rankedHeadline)}</strong><span>${ranked.placed ? `${Number(ranked.wins || 0)} S · ${Number(ranked.losses || 0)} N` : "Noch kein Ranked-Kampf"}</span></article><article class="home-summary-card dex-summary"><small>DEX-FORTSCHRITT</small><strong>${discovered}/${dexTotal}</strong><span>Pokémon</span></article></div>`;
 }
 
 function renderDex() {
@@ -549,6 +546,7 @@ function toggleTopOverlay(type) {
 }
 
 function render() {
+  view.classList.toggle("home-view", page === "home");
   document.querySelectorAll(".tabs button").forEach((button) => button.classList.toggle("active", button.dataset.page === page));
   ({ home:renderHome, dex:renderDex, pc:renderPc, multi:renderMulti, history:renderHistory }[page] || renderHome)();
 }

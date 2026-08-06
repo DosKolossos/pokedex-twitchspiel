@@ -35,10 +35,11 @@ function proxyApi(req, res, url) {
   const headers = { ...req.headers, host: API_URL.host, "x-widget-dev-key": DEV_KEY };
   delete headers.origin;
   delete headers.referer;
-  const upstream = https.request({
+  const transport = API_URL.protocol === "http:" ? http : https;
+  const upstream = transport.request({
     protocol: API_URL.protocol,
     hostname: API_URL.hostname,
-    port: API_URL.port || 443,
+    port: API_URL.port || (API_URL.protocol === "http:" ? 80 : 443),
     method: req.method,
     path: `${API_URL.pathname.replace(/\/$/, "")}${url.pathname}${url.search}`,
     headers,

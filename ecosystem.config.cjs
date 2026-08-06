@@ -8,6 +8,9 @@ module.exports = {
       env: {
         NODE_ENV: "production"
       },
+      out_file: "/opt/pokedex/logs/pokedex-bot-out.log",
+      error_file: "/opt/pokedex/logs/pokedex-bot-error.log",
+      merge_logs: true,
       max_memory_restart: "350M",
       restart_delay: 5000,
       autorestart: true,
@@ -22,6 +25,9 @@ module.exports = {
       env: {
         NODE_ENV: "production"
       },
+      out_file: "/opt/pokedex/logs/pokedex-overlay-out.log",
+      error_file: "/opt/pokedex/logs/pokedex-overlay-error.log",
+      merge_logs: true,
       max_memory_restart: "250M",
       restart_delay: 3000,
       autorestart: true,
@@ -36,6 +42,9 @@ module.exports = {
       env: {
         NODE_ENV: "production"
       },
+      out_file: "/opt/pokedex/logs/pokedex-web-sync-out.log",
+      error_file: "/opt/pokedex/logs/pokedex-web-sync-error.log",
+      merge_logs: true,
       max_memory_restart: "150M",
       restart_delay: 10000,
       autorestart: true,
