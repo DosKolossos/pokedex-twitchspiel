@@ -71,5 +71,6 @@
     }
     if(runToken===token){await completeRankedBattle();currentBattleId=null;serverResult=null;setTimeout(run,2000);}
   }
-  $("#replay").addEventListener("click",()=>{if(!currentBattleId)run();});run();
+  $("#replay")?.addEventListener("click",()=>{if(!currentBattleId)run();});
+  run();
 })();
