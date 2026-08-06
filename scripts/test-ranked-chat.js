@@ -24,7 +24,8 @@ rankedQueue.resetCommandCooldownsForTests();
 let result = rankedQueue.toggleFromChat({ filePath:queueFile, readJsonSafe, profile, userId:"1", userName:"Tester", rawInput:"!ranked", now:100000 });
 assert.equal(result.action, "join");
 assert.deepEqual(result.team.map((mon) => mon.caughtAt), [1, 2, 3]);
-assert.match(result.message, /1\. Leadmon/);
+assert.equal(result.message, "Tester betritt die Ranked-Queue.");
+assert.doesNotMatch(result.message, /Leadmon|Zweitmon|Drittmon/);
 
 result = rankedQueue.toggleFromChat({ filePath:queueFile, readJsonSafe, profile, userId:"1", userName:"Tester", rawInput:"!ranked", now:100001 });
 assert.equal(result.reason, "cooldown");
