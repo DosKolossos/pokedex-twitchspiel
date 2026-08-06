@@ -49,6 +49,11 @@ app.get("/api/raid", (_req, res) => {
   res.json({ ...readJsonSafe(paths.RAID_STATE_JSON, { current: null }), serverNow: Date.now() });
 });
 
+app.get("/api/ranked-battle", (_req, res) => {
+  setNoCache(res);
+  res.json(readJsonSafe(paths.RANKED_BATTLE_JSON, { id:null, players:[], simulation:null }));
+});
+
 // Lokale Entwicklungsroute für das Twitch-Widget. Vor einer öffentlichen
 // Freigabe wird userId durch die serverseitig geprüfte Twitch-Extension-
 // Identität ersetzt.

@@ -1,5 +1,6 @@
 const paths = require("../lib/paths");
 const rankedQueue = require("../lib/rankedQueue");
+const rankedMatchmaker = require("../lib/rankedMatchmaker");
 const store = require("../lib/fileStore");
 const spawn = require("../lib/spawn");
 const catching = require("../lib/catch");
@@ -181,6 +182,17 @@ class GameAdapter {
           userName,
           rawInput,
         });
+        if (result.action === "join") {
+          const queue = rankedQueue.readQueue(paths.RANKED_QUEUE_JSON, store.readJson);
+          const match = rankedMatchmaker.startIfReady({ queue, joiningUserId:userId, profiles });
+          if (match) {
+            rankedQueue.writeQueue(paths.RANKED_QUEUE_JSON, queue);
+            store.writeJson(paths.PROFILES_JSON, profiles);
+            store.writeJson(paths.RANKED_BATTLE_JSON, match);
+            result.match = match;
+            result.message = `⚔️ ${match.players[0].display} trifft im Ranked-Kampf auf ${match.players[1].display}! ${match.winnerDisplay} gewinnt (+20 LP).`;
+          }
+        }
         return { result, message: result.silent ? "" : String(result.message || "") };
       }
       default:

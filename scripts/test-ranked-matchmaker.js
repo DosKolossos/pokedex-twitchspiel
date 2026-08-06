@@ -1,0 +1,13 @@
+const assert = require("assert");
+const matchmaker = require("../lib/rankedMatchmaker");
+const team = (base) => [0,1,2].map((i) => ({ caughtAt:base+i, dexId:25+i, displayName:`Mon${base+i}`, level:20+i }));
+const queue = { entries:{ a:{userId:"a",display:"Alpha",joinedAt:1,team:team(10)}, b:{userId:"b",display:"Beta",joinedAt:2,team:team(20)} } };
+const profiles = { users:{ a:{ranked:{}}, b:{ranked:{}} } };
+assert.equal(matchmaker.pairOldest(queue,"b")[0].userId,"a");
+const match = matchmaker.startIfReady({queue,joiningUserId:"b",profiles,now:12345});
+assert.ok(match?.winnerUserId);
+assert.deepEqual(Object.keys(queue.entries),[]);
+assert.equal(profiles.users.a.ranked.games,1);
+assert.equal(profiles.users.b.ranked.games,1);
+assert.equal(match.players[0].team.length,3);
+console.log("Ranked-Matchmaker, Kampfabschluss, LP und Queue-Entsperrung: OK");

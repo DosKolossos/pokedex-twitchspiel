@@ -1,6 +1,8 @@
 (() => {
   const lab = window.PokeBattleLab;
-  const scenario = { seed: 1004, teamA: ["alakazam", "jolteon", "gengar"], teamB: ["charizard", "dragonite", "machamp"] };
+  let scenario = { seed: 1004, teamA: ["alakazam", "jolteon", "gengar"], teamB: ["charizard", "dragonite", "machamp"] };
+  let serverResult = null;
+  let playerNames = ["Team Blau", "Team Rot"];
   const speed = Math.max(.25, Number(new URLSearchParams(location.search).get("speed")) || 1);
   const $ = (selector, root = document) => root.querySelector(selector);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms * speed));
@@ -17,7 +19,7 @@
   function spriteFallback(mon,back){return`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${back?"back/":""}${mon.dexId}.gif`;}
 
   function eventsFrom(result){
-    const state={teams:freshTeams(),active:[0,0]},events=[{type:"message",text:"Team Blau fordert Team Rot heraus!"}];
+    const state={teams:freshTeams(),active:[0,0]},events=[{type:"message",text:`${playerNames[0]} fordert ${playerNames[1]} heraus!`}];
     for(const entry of result.log){const text=entry.text;let m;
       if(/^Zug \d+$/.test(text)){events.push({type:"turn",turn:entry.turn});continue;}
       if((m=text.match(/^(Team Blau|Team Rot) schickt (.+?) in den Kampf/))){const side=m[1]==="Team Blau"?0:1,to=findMon(state,m[2]);if(to){state.active[side]=to.index;events.push({type:"switch",side,to:{...to},text});}continue;}
@@ -29,7 +31,7 @@
       if((m=text.match(/^(.+?) ist kampfunfähig/))){const mon=findMon(state,m[1]);if(mon){mon.fainted=true;mon.hp=0;events.push({type:"faint",mon:{...mon},text});}continue;}
       if(text.includes("geht daneben")||text.includes("keine Wirkung")||text.includes("Angriff steigt"))events.push({type:"message",text});
     }
-    events.push({type:"winner",text:result.winner==null?"Unentschieden":`${result.state[result.winner].name} gewinnt!`});return events;
+    events.push({type:"winner",text:result.winner==null?"Unentschieden":`${playerNames[result.winner]} gewinnt!`});return events;
   }
 
   function renderTeam(state,side){const root=side?dom.rightTeam:dom.leftTeam;root.innerHTML="";state.teams[side].forEach(mon=>{const slot=document.createElement("div");slot.className=`team-slot${state.active[side]===mon.index?" active":""}${mon.fainted?" fainted":""}`;const img=document.createElement("img");installImage(img,`/sprites/icons/${mon.dexId}.png`,`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mon.dexId}.png`);slot.append(img);root.append(slot);});}
@@ -48,7 +50,8 @@
   function damagePop(mon,amount,label=""){dom.damage.className=`damage-pop ${mon.side?"enemy":"player"}`;dom.damage.innerHTML=`−${Math.max(1,Math.round(amount/mon.maxHp*100))} %${label?`<small>${label}</small>`:""}`;void dom.damage.offsetWidth;dom.damage.classList.add("show");}
   async function playMove(state,event){const attackerBox=event.side?dom.right:dom.left,defenderBox=event.side?dom.left:dom.right;dom.message.textContent=`${event.attacker.name} setzt ${event.move?.name||"eine Attacke"} ein!`;attackerBox.classList.add(event.side?"attack-right":"attack-left");dom.effect.className=`move-effect ${event.move?.type||"normal"} ${event.side?"to-player":"to-enemy"}`;await sleep(460);const defender=findMon(state,event.defender.name);defender.hp=event.after;defenderBox.classList.add("hit");damagePop(defender,event.amount,event.effectiveness.includes("sehr effektiv")?"SEHR EFFEKTIV":"");renderPanel(defender.side?dom.rightPanel:dom.leftPanel,defender,!defender.side);await sleep(780);attackerBox.classList.remove("attack-left","attack-right");defenderBox.classList.remove("hit");}
 
-  async function run(){const runToken=++token,result=lab.simulate(scenario),events=eventsFrom(result),state={teams:freshTeams(),active:[0,0]};dom.winner.hidden=true;dom.turn.textContent="KAMPFBEGINN";renderActive(state,0,true);renderActive(state,1,true);await sleep(700);
+  async function loadRankedBattle(){try{const response=await fetch("/api/ranked-battle",{cache:"no-store"});if(!response.ok)return;const battle=await response.json();if(!battle?.id||!battle?.simulation)return;scenario={seed:battle.seed,teamA:battle.battleTeams?.[0]||scenario.teamA,teamB:battle.battleTeams?.[1]||scenario.teamB};playerNames=[battle.players?.[0]?.display||"Team Blau",battle.players?.[1]?.display||"Team Rot"];serverResult=battle.simulation;}catch(error){console.warn("Ranked-Kampf konnte nicht geladen werden",error);}}
+  async function run(){await loadRankedBattle();const runToken=++token,result=serverResult||lab.simulate(scenario),events=eventsFrom(result),state={teams:freshTeams(),active:[0,0]};dom.winner.hidden=true;dom.turn.textContent="KAMPFBEGINN";renderActive(state,0,true);renderActive(state,1,true);await sleep(700);
     for(const event of events){if(runToken!==token)return;
       if(event.type==="turn"){dom.turn.textContent=`ZUG ${event.turn}`;await sleep(320);}
       else if(event.type==="switch"){dom.message.textContent=event.text;const old=event.side?dom.right:dom.left;old.style.opacity="0";await sleep(320);state.active[event.side]=event.to.index;renderActive(state,event.side,true);await sleep(650);}

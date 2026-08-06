@@ -60,6 +60,11 @@ app.get("/api/raid", (_req, res) => {
   res.json({ ...readJsonSafe(paths.RAID_STATE_JSON, { current: null }), serverNow: Date.now() });
 });
 
+app.get("/api/ranked-battle", (_req, res) => {
+  setNoCache(res);
+  res.json(readJsonSafe(paths.RANKED_BATTLE_JSON, { id:null, players:[], simulation:null }));
+});
+
 app.get("/api/widget/player", (req, res) => {
   setNoCache(res);
 
