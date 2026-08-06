@@ -10,9 +10,9 @@
   const dom = { left:$("#playerMon"),right:$("#enemyMon"),leftPanel:$("#playerPanel"),rightPanel:$("#enemyPanel"),leftTeam:$("#teamLeft"),rightTeam:$("#teamRight"),message:$("#message"),turn:$("#turn"),damage:$("#damage"),effect:$("#effect"),winner:$("#winner") };
   let token = 0;
 
-  function makeMon(id, side, index) { const species=lab.SPECIES[id],stats=lab.stats(species.base,50,species.nature);return{id,side,index,name:species.name,dexId:species.dexId,maxHp:stats.hp,hp:stats.hp,status:null,fainted:false}; }
-  function freshTeams(){return[scenario.teamA.map((id,i)=>makeMon(id,0,i)),scenario.teamB.map((id,i)=>makeMon(id,1,i))];}
-  function findMon(state,name){return state.teams.flat().find(mon=>mon.name===name);}
+  function makeMon(input, side, index) { const descriptor=typeof input==="object"&&input?input:{id:input},species=lab.SPECIES[descriptor.id],level=Math.max(1,Math.min(100,Number(descriptor.level||50))),stats=lab.stats(species.base,level,species.nature);return{id:descriptor.id,instanceId:String(descriptor.instanceId||`${side}:${index}`),side,index,name:descriptor.name||species.name,dexId:Number(descriptor.dexId||species.dexId),level,maxHp:stats.hp,hp:stats.hp,status:null,fainted:false}; }
+  function freshTeams(){return[scenario.teamA.map((mon,i)=>makeMon(mon,0,i)),scenario.teamB.map((mon,i)=>makeMon(mon,1,i))];}
+  function findMon(state,name,side){return state.teams.flat().find(mon=>mon.name===name&&(side==null||mon.side===side));}
   function active(state,side){return state.teams[side][state.active[side]];}
   function moveNamed(name){return Object.values(lab.MOVES).find(move=>move.name===name);}
   function installImage(img,local,fallback){img.onerror=()=>{if(img.src!==fallback)img.src=fallback;};img.src=local;}
@@ -23,9 +23,9 @@
     const state={teams:freshTeams(),active:[0,0]},events=[{type:"message",text:`${playerNames[0]} fordert ${playerNames[1]} heraus!`}];
     for(const entry of result.log){const text=entry.text;let m;
       if(/^Zug \d+$/.test(text)){events.push({type:"turn",turn:entry.turn});continue;}
-      if((m=text.match(/^(Team Blau|Team Rot) schickt (.+?) in den Kampf/))){const side=m[1]==="Team Blau"?0:1,to=findMon(state,m[2]);if(to){state.active[side]=to.index;events.push({type:"switch",side,to:{...to},text});}continue;}
-      if((m=text.match(/^(.+?) wird gegen (.+?) ausgewechselt/))){const from=findMon(state,m[1]),to=findMon(state,m[2]);if(from&&to){state.active[from.side]=to.index;events.push({type:"switch",side:from.side,to:{...to},text});}continue;}
-      if((m=text.match(/^(.+?) setzt (.+?) ein: (\d+) Schaden(.*)$/))){const attacker=findMon(state,m[1]);if(attacker){const defender=active(state,attacker.side?0:1),amount=Number(m[3]),before=defender.hp;defender.hp=Math.max(0,before-amount);events.push({type:"move",side:attacker.side,attacker:{...attacker},defender:{...defender},move:moveNamed(m[2]),amount,before,after:defender.hp,text,effectiveness:m[4]});}continue;}
+      if((m=text.match(/^(Team Blau|Team Rot) schickt (.+?) in den Kampf/))){const side=m[1]==="Team Blau"?0:1,to=findMon(state,m[2],side);if(to){state.active[side]=to.index;events.push({type:"switch",side,to:{...to},text});}continue;}
+      if((m=text.match(/^(.+?) wird gegen (.+?) ausgewechselt/))){const from=[active(state,0),active(state,1)].find(mon=>mon.name===m[1]),to=from&&findMon(state,m[2],from.side);if(from&&to){state.active[from.side]=to.index;events.push({type:"switch",side:from.side,to:{...to},text});}continue;}
+      if((m=text.match(/^(.+?) setzt (.+?) ein: (\d+) Schaden(.*)$/))){const attacker=[active(state,0),active(state,1)].find(mon=>mon.name===m[1]&&mon.hp>0);if(attacker){const defender=active(state,attacker.side?0:1),amount=Number(m[3]),before=defender.hp;defender.hp=Math.max(0,before-amount);events.push({type:"move",side:attacker.side,attacker:{...attacker},defender:{...defender},move:moveNamed(m[2]),amount,before,after:defender.hp,text,effectiveness:m[4]});}continue;}
       if((m=text.match(/^(.+?) setzt (.+?) ein und heilt (\d+) KP/))){const mon=findMon(state,m[1]);if(mon){mon.hp=Math.min(mon.maxHp,mon.hp+Number(m[3]));events.push({type:"heal",mon:{...mon},text});}continue;}
       if((m=text.match(/^(.+?) setzt (.+?) ein[. –]+(.+?) wird (verbrannt|paralysiert)/))){const target=findMon(state,m[3]);if(target){target.status=m[4]==="verbrannt"?"burned":"paralyzed";events.push({type:"status",target:{...target},text});}continue;}
       if((m=text.match(/^(.+?) erleidet (\d+) Verbrennungsschaden/))){const mon=findMon(state,m[1]);if(mon){const amount=Number(m[2]);mon.hp=Math.max(0,mon.hp-amount);events.push({type:"damage",mon:{...mon},amount,text});}continue;}
@@ -36,7 +36,7 @@
   }
 
   function renderTeam(state,side){const root=side?dom.rightTeam:dom.leftTeam;root.innerHTML="";state.teams[side].forEach(mon=>{const slot=document.createElement("div");slot.className=`team-slot${state.active[side]===mon.index?" active":""}${mon.fainted?" fainted":""}`;const img=document.createElement("img");installImage(img,`/sprites/icons/${mon.dexId}.png`,`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mon.dexId}.png`);slot.append(img);root.append(slot);});}
-  function renderPanel(panel,mon,exact){const ratio=Math.max(0,mon.hp/mon.maxHp),fill=$("[data-fill]",panel);$("[data-name]",panel).textContent=mon.name;$("[data-percent]",panel).textContent=`${Math.ceil(ratio*100)} %`;fill.style.width=`${ratio*100}%`;fill.classList.toggle("medium",ratio<=.5&&ratio>.2);fill.classList.toggle("low",ratio<=.2);const badge=$("[data-status]",panel);badge.hidden=!mon.status;badge.className=`status ${mon.status||""}`;badge.textContent=mon.status==="burned"?"BRN":mon.status==="paralyzed"?"PAR":"";const hp=$("[data-exact]",panel);if(hp)hp.textContent=exact?`${mon.hp} / ${mon.maxHp} KP`:"";}
+  function renderPanel(panel,mon,exact){const ratio=Math.max(0,mon.hp/mon.maxHp),fill=$("[data-fill]",panel);$("[data-name]",panel).textContent=`${mon.name} · Lv. ${mon.level}`;$("[data-percent]",panel).textContent=`${Math.ceil(ratio*100)} %`;fill.style.width=`${ratio*100}%`;fill.classList.toggle("medium",ratio<=.5&&ratio>.2);fill.classList.toggle("low",ratio<=.2);const badge=$("[data-status]",panel);badge.hidden=!mon.status;badge.className=`status ${mon.status||""}`;badge.textContent=mon.status==="burned"?"BRN":mon.status==="paralyzed"?"PAR":"";const hp=$("[data-exact]",panel);if(hp)hp.textContent=exact?`${mon.hp} / ${mon.maxHp} KP`:"";}
   function playEntry(box,side){
     box.getAnimations().forEach((animation)=>animation.cancel());
     box.animate(

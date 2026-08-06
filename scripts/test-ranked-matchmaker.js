@@ -15,10 +15,23 @@ assert.equal(queue.entries.b.status,"battling");
 assert.equal(profiles.users.a.ranked.games,undefined);
 assert.equal(profiles.users.b.ranked.games,undefined);
 assert.equal(match.players[0].team.length,3);
+assert.deepEqual(match.battleTeams[0].map((mon) => mon.name), ["Mon10", "Mon11", "Mon12"]);
+assert.deepEqual(match.battleTeams[1].map((mon) => mon.name), ["Mon20", "Mon21", "Mon22"]);
+assert.deepEqual(match.battleTeams[0].map((mon) => mon.level), [20,21,22]);
+assert.equal(new Set(match.battleTeams.flat().map((mon) => mon.instanceId)).size, 6);
+assert.ok(match.diagnostics.warnings.length > 0);
+for (const side of match.simulation.state) {
+  for (const mon of side.team) assert.ok(mon.hp >= 0, `${mon.name} hat negative KP`);
+}
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ranked-battle-"));
 const queueFile = path.join(tempDir, "queue.json");
 const readJson = (file, fallback) => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : fallback;
 battleQueue.enqueue(queueFile, readJson, match);
+const savedLogs = fs.readdirSync(path.join(tempDir, "rankedBattleLogs"));
+assert.equal(savedLogs.length, 1);
+const savedLog = JSON.parse(fs.readFileSync(path.join(tempDir, "rankedBattleLogs", savedLogs[0]), "utf8"));
+assert.equal(savedLog.id, match.id);
+assert.deepEqual(savedLog.diagnostics.teams[0].map((mon) => mon.level), [20,21,22]);
 const claimed = battleQueue.claimNext(queueFile, readJson);
 assert.equal(claimed.id, match.id);
 assert.equal(claimed.status, "playing");
