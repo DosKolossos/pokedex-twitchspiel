@@ -4,6 +4,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const paths = require("./lib/paths");
+const overlayEventQueue = require("./lib/overlayEventQueue");
 const rankedBattleQueue = require("./lib/rankedBattleQueue");
 const rankedMatchmaker = require("./lib/rankedMatchmaker");
 const rankedQueue = require("./lib/rankedQueue");
@@ -64,9 +65,29 @@ app.get("/api/raid", (_req, res) => {
   res.json({ ...readJsonSafe(paths.RAID_STATE_JSON, { current: null }), serverNow: Date.now() });
 });
 
+app.get("/api/overlay-event", (_req, res) => {
+  setNoCache(res);
+  const event = overlayEventQueue.head(paths.OVERLAY_EVENT_QUEUE_JSON, readJsonSafe);
+  res.json({
+    event: event ? { id: event.id, type: event.type, status: event.status } : null,
+    serverNow: Date.now(),
+  });
+});
+
 app.get("/api/ranked-battle", (_req, res) => {
   setNoCache(res);
-  res.json(rankedBattleQueue.claimNext(paths.RANKED_BATTLE_JSON, readJsonSafe));
+  const event = overlayEventQueue.claimHead(
+    paths.OVERLAY_EVENT_QUEUE_JSON,
+    readJsonSafe,
+    "ranked"
+  );
+  if (!event) return res.json(null);
+  const battle = rankedBattleQueue.claimNext(paths.RANKED_BATTLE_JSON, readJsonSafe);
+  if (!battle || String(battle.id) !== String(event.battleId)) {
+    console.error(`[overlay] Ranked-Queue stimmt nicht überein: Event ${event.battleId}, Battle ${battle?.id || "fehlt"}`);
+    return res.status(409).json({ error: "ranked_queue_mismatch" });
+  }
+  res.json(battle);
 });
 
 app.post("/api/ranked-battle/:id/complete", (req, res) => {
@@ -89,6 +110,18 @@ app.post("/api/ranked-battle/:id/complete", (req, res) => {
       rankedBattleId: job.id,
     });
     fs.writeFileSync(paths.CHAT_OUTBOX_JSON, JSON.stringify(outbox, null, 2));
+    const activeEvent = overlayEventQueue.head(paths.OVERLAY_EVENT_QUEUE_JSON, readJsonSafe);
+    if (
+      activeEvent?.type === "ranked" &&
+      activeEvent.status === "active" &&
+      String(activeEvent.battleId) === String(job.id)
+    ) {
+      overlayEventQueue.complete(
+        paths.OVERLAY_EVENT_QUEUE_JSON,
+        readJsonSafe,
+        activeEvent.id
+      );
+    }
   }
   res.json({ ok: true, alreadyCompleted: result.alreadyCompleted });
 });

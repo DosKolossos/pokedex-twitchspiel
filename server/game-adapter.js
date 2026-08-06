@@ -2,6 +2,7 @@ const paths = require("../lib/paths");
 const rankedQueue = require("../lib/rankedQueue");
 const rankedMatchmaker = require("../lib/rankedMatchmaker");
 const rankedBattleQueue = require("../lib/rankedBattleQueue");
+const overlayEventQueue = require("../lib/overlayEventQueue");
 const store = require("../lib/fileStore");
 const spawn = require("../lib/spawn");
 const catching = require("../lib/catch");
@@ -97,8 +98,14 @@ class GameAdapter {
     const userName = String(user?.userName || "");
     switch (command) {
       case "spawn": {
-        const result = rawInput ? spawn.spawnManual(prefix(rawInput, "spawn")) : spawn.spawnAuto();
-        return { result, message: text(paths.SPAWN_MESSAGE_TXT), schedule: result?.ok ? "spawn" : null };
+        if (overlayEventQueue.hasOpenType(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, "spawn")) {
+          return { result: { ok:false, reason:"spawn_queued" }, message: rawInput ? "⏳ Ein Spawn wartet bereits oder läuft gerade." : "" };
+        }
+        const prepared = rawInput ? spawn.prepareManual(prefix(rawInput, "spawn")) : spawn.prepareAuto();
+        if (!prepared.ok) return { result: prepared, message: rawInput ? text(paths.SPAWN_MESSAGE_TXT) : "" };
+        const id = `spawn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        overlayEventQueue.enqueue(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, { id, type:"spawn", payload:prepared });
+        return { result: { ok:true, queued:true, id }, message: rawInput ? "⏳ Der Spawn wurde in die Overlay-Queue eingereiht." : "", schedule:"overlay" };
       }
       case "catch": {
         const result = catching.handleCatch({ userId, userName });
@@ -162,8 +169,12 @@ class GameAdapter {
         return { result, message: text(paths.RAID_MESSAGE_TXT) };
       }
       case "raidspawn": {
-        const result = raid.spawnRaid({ userId, userName, rawInput });
-        return { result, message: text(paths.RAID_MESSAGE_TXT), schedule: result?.ok ? "raid" : null };
+        if (overlayEventQueue.hasOpenType(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, "raid")) {
+          return { result:{ ok:false, reason:"raid_queued" }, message:"⏳ Ein Raid wartet bereits oder läuft gerade." };
+        }
+        const id = `raid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        overlayEventQueue.enqueue(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, { id, type:"raid", payload:{ userId, userName, rawInput } });
+        return { result:{ ok:true, queued:true, id }, message:"⏳ Der Raid wurde in die Overlay-Queue eingereiht.", schedule:"overlay" };
       }
       case "raidresolve": {
         const result = raid.resolveRaid();
@@ -189,6 +200,7 @@ class GameAdapter {
           if (match) {
             rankedQueue.writeQueue(paths.RANKED_QUEUE_JSON, queue);
             rankedBattleQueue.enqueue(paths.RANKED_BATTLE_JSON, store.readJson, match);
+            overlayEventQueue.enqueue(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, { id:`ranked-${match.id}`, type:"ranked", battleId:match.id });
             result.match = match;
             result.message = `⚔️ ${match.players[0].display} trifft im Ranked-Kampf auf ${match.players[1].display}! Der Kampf geht ins Overlay.`;
           }
@@ -202,6 +214,20 @@ class GameAdapter {
 
   getSpawnState() {
     return store.readJson(paths.SPAWN_JSON, { active: false, endsAt: 0, pokemon: null, participants: [] });
+  }
+
+  startPreparedSpawn(payload) {
+    return this.run(() => {
+      const result = spawn.startPrepared(payload || {});
+      return { result, message: text(paths.SPAWN_MESSAGE_TXT), schedule: result?.ok ? "spawn" : null };
+    });
+  }
+
+  startPreparedRaid(payload) {
+    return this.run(() => {
+      const result = raid.spawnRaid(payload || {});
+      return { result, message:text(paths.RAID_MESSAGE_TXT), schedule:result?.ok ? "raid" : null };
+    });
   }
 
   getRaidState() {

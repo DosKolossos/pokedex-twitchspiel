@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PokéDex Overlay</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div id="card" class="card">
+      <div class="img"><img id="sprite" alt="" /></div>
+      <div>
+        <div class="title" id="name">Pokémon</div>
+        <div class="meta">
+          <span id="rarity">RARITY</span>
+          <span class="pill">⏱️ <span class="timer" id="timer">60</span>s</span>
+        </div>
+        <div class="hint">🥎 Tippe <b>!catch</b> um teilzunehmen</div>
+      </div>
+    </div>
+    <div id="raid-card" class="raid-overlay" style="display:none;">
+      <div class="raid-panel">
+        <div class="raid-content">
+          <div class="raid-left">
+            <div id="raidBossName" class="raid-title">RAIDBOSS</div>
+
+            <div class="raid-meta">
+              <span id="raidTier" class="raid-pill tier-easy">EASY</span>
+              <span id="raidCountdown" class="raid-time">90s</span>
+            </div>
+
+            <div class="raid-bar-wrap">
+              <div class="raid-bar-bg">
+                <div id="raidBarFill" class="raid-bar-fill"></div>
+              </div>
+              <!-- optional klein unten/innen -->
+              <!-- <div id="raidBarText" class="raid-bar-text">0 / 80</div> -->
+            </div>
+
+            <div class="raid-join-hint">!raid join</div>
+          </div>
+
+          <div class="raid-right">
+            <img id="raidBossImage" class="raid-boss-img" alt="Raidboss" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+<script>
+(() => {
+  // =========================
+  // SPAWN DOM
+  // =========================
+  const spawn = {
+    card: document.getElementById("card"),
+    sprite: document.getElementById("sprite"),
+    name: document.getElementById("name"),
+    rarity: document.getElementById("rarity"),
+    timer: document.getElementById("timer"),
+  };
+
+  // =========================
+  // RAID DOM (dein kompaktes Layout)
+  // =========================
+  const raid = {
+    card: document.getElementById("raid-card"),
+    panel: document.querySelector("#raid-card .raid-panel"),
+    tier: document.getElementById("raidTier"),
+    bossName: document.getElementById("raidBossName"),
+    countdown: document.getElementById("raidCountdown"),
+    barFill: document.getElementById("raidBarFill"),
+    bossImage: document.getElementById("raidBossImage"),
+  };
+
+  // =========================
+  // STATE
+  // =========================
+  let lastSpawnKey = "";
+  let lastRaidFetch = null; // { current, serverNow }
+  let lastServerNow = 0;
+  let lastClientNow = 0;
+  let raidVisible = false;
+
+  // =========================
+  // HELPERS
+  // =========================
+  function approxServerNow() {
+    if (!lastServerNow) return Date.now();
+    return lastServerNow + (Date.now() - lastClientNow);
+  }
+
+  function slugifyGerman(s) {
+    return String(s || "")
+      .replace(/^✨\s*Shiny\s*/i, "")
+      .replace(/♀/g, "f").replace(/♂/g, "m")
+      .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9\-]/g, "")
+      .toLowerCase();
+  }
+
+  function normRarity(r) {
+    const v = String(r || "").toLowerCase().trim();
+    if (v === "gottheit") return "gottheit";
+    return v || "unknown";
+  }
+
+  function applyRarityClass(el, rarity) {
+    if (!el) return;
+    const r = normRarity(rarity);
+    for (const c of [...el.classList]) {
+      if (c.startsWith("rarity-")) el.classList.remove(c);
+    }
+    el.classList.add(`rarity-${r}`);
+  }
+
+  function setSpawnVisible(show) {
+    if (!spawn.card) return;
+    if (show) spawn.card.classList.add("show");
+    else spawn.card.classList.remove("show");
+  }
+
+  function setRaidVisible(show) {
+    if (!raid.card) return;
+
+    if (show && !raidVisible) {
+      raid.card.style.display = "";
+      raid.card.classList.add("raid-enter");
+      setTimeout(() => raid.card && raid.card.classList.remove("raid-enter"), 220);
+    } else if (!show && raidVisible) {
+      raid.card.style.display = "none";
+      raid.card.classList.remove("raid-enter");
+    }
+
+    raidVisible = show;
+  }
+
+  function asArrayParticipants(p) {
+    if (!p) return [];
+    if (Array.isArray(p)) return p;
+    if (typeof p === "object") return Object.values(p);
+    return [];
+  }
+
+  function getTier(raw) {
+    return String(raw || "easy").toLowerCase();
+  }
+
+  function setTierAndTheme(tierRaw) {
+    const tier = getTier(tierRaw);
+
+    if (raid.tier) {
+      [...raid.tier.classList].forEach(cls => {
+        if (cls.startsWith("tier-")) raid.tier.classList.remove(cls);
+      });
+      raid.tier.classList.add(`tier-${tier}`);
+      raid.tier.textContent = tier.toUpperCase();
+    }
+
+    if (raid.panel) {
+      [...raid.panel.classList].forEach(cls => {
+        if (cls.startsWith("theme-")) raid.panel.classList.remove(cls);
+      });
+      raid.panel.classList.add(`theme-${tier}`);
+    }
+  }
+
+  function getBossName(current) {
+    return current?.boss?.name || current?.pokemon?.displayName || current?.pokemon?.name || "Raidboss";
+  }
+
+  function getBossImageUrl(current) {
+    // Priorität: explizite URLs
+    const direct =
+      current?.boss?.spriteUrl ||
+      current?.boss?.artworkUrl ||
+      current?.boss?.imageUrl ||
+      current?.pokemon?.spriteUrl ||
+      current?.pokemon?.artworkUrl ||
+      current?.pokemon?.imageUrl;
+
+    if (direct) return direct;
+
+    // Fallback über dexId (falls vorhanden)
+    let dexId = Number(
+      current?.boss?.dexId ??
+      current?.pokemon?.dexId ??
+      0
+    );
+
+    // Extra-Fallback für ältere raidState.json-Einträge ohne dexId/spriteUrl
+    if (!(Number.isFinite(dexId) && dexId > 0)) {
+      const keyify = (s) => String(s || "")
+        .toLowerCase()
+        .replace(/[_-](easy|normal|hard|epic|legendary)$/i, "")
+        .replace(/[^a-z0-9]/g, "");
+
+      const bossIdKey = keyify(current?.boss?.id);
+      const bossNameKey = keyify(current?.boss?.name || current?.pokemon?.displayName || current?.pokemon?.name);
+
+      const map = {
+        raticate: 20, rattikarl: 20,
+        arbok: 24,
+        golbat: 42,
+        kingler: 99,
+        onix: 95,
+        simsala: 65, alakazam: 65,
+        dragoran: 149, dragonite: 149,
+        garados: 130, gyarados: 130,
+        mewtu: 150, mewtwo: 150,
+        arktos: 144, articuno: 144
+      };
+
+      dexId = Number(map[bossIdKey] || map[bossNameKey] || 0);
+    }
+
+    if (Number.isFinite(dexId) && dexId > 0) {
+      return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dexId}.png`;
+    }
+
+    return "";
+  }
+
+  function getRequiredPower(current) {
+    return Number(
+      current?.boss?.requiredTotalLevel ??
+      current?.requiredTotalLevel ??
+      current?.requiredPower ??
+      0
+    ) || 0;
+  }
+
+  function getJoinEndsAt(current) {
+    return Number(current?.joinEndsAt ?? current?.endsAt ?? 0) || 0;
+  }
+
+  function getCurrentPower(current) {
+    // Falls Backend schon fertigen Wert liefert -> bevorzugen
+    const direct = Number(current?.currentPower ?? current?.totalPower);
+    if (Number.isFinite(direct) && direct >= 0) return direct;
+
+    const participants = asArrayParticipants(current?.participants);
+    return participants.reduce((sum, p) => {
+      return sum + Number(
+        p?.power ??
+        p?.levelSnapshot ??
+        p?.level ??
+        0
+      );
+    }, 0);
+  }
+
+  function normalizeRaidPayload(data) {
+    // Unterstützt { current, serverNow }
+    if (data && typeof data === "object" && "current" in data) {
+      return {
+        current: data.current || null,
+        serverNow: Number(data.serverNow) || Date.now()
+      };
+    }
+
+    // Unterstützt direktes Raid-Objekt in raidState.json
+    if (data && typeof data === "object" && (data.boss || data.joinEndsAt || data.endsAt)) {
+      return {
+        current: data,
+        serverNow: Date.now()
+      };
+    }
+
+    return {
+      current: null,
+      serverNow: Date.now()
+    };
+  }
+
+  // =========================
+  // RAID RENDER (kompakt, HP-Bar läuft runter)
+  // =========================
+  function renderRaidFromState() {
+    if (!raid.card) return;
+
+    const current = lastRaidFetch?.current || null;
+    if (!current) {
+      setRaidVisible(false);
+      return;
+    }
+
+    const joinEndsAt = getJoinEndsAt(current);
+    const now = approxServerNow();
+    const leftMs = Math.max(0, joinEndsAt - now);
+
+    // Nur Join-Phase anzeigen
+    if (joinEndsAt <= 0 || leftMs <= 0) {
+      setRaidVisible(false);
+      return;
+    }
+
+    setRaidVisible(true);
+
+    const bossName = getBossName(current);
+    const tierRaw = current?.boss?.tier || current?.tier || "easy";
+    const bossImage = getBossImageUrl(current);
+
+    const required = getRequiredPower(current);
+    const currentPower = getCurrentPower(current);
+
+    // Texte
+    if (raid.bossName) {
+      raid.bossName.textContent = String(bossName || "Raidboss").toUpperCase();
+    }
+
+    setTierAndTheme(tierRaw);
+
+    if (raid.countdown) {
+      const sec = Math.max(0, Math.ceil(leftMs / 1000));
+      raid.countdown.textContent = `${sec}s`;
+    }
+
+    // Bild nur setzen, wenn neu (verhindert Flackern)
+    if (raid.bossImage) {
+      if (bossImage && raid.bossImage.dataset.src !== bossImage) {
+        raid.bossImage.onerror = () => {
+          raid.bossImage.onerror = null;
+          raid.bossImage.src = "/sprites/pokeball.png?ts=" + Date.now();
+        };
+        raid.bossImage.src = bossImage;
+        raid.bossImage.dataset.src = bossImage;
+      }
+      // kein hartes Leeren, damit's nicht blinkt
+    }
+
+    // HP-Bar soll RUNTERGEHEN:
+    // Start = 100%, bei genügend Power -> 0%
+    const clamped = Math.max(0, Math.min(currentPower, required || 0));
+    const remaining = Math.max(0, (required || 0) - clamped);
+    const remainingPct = required > 0 ? (remaining / required) * 100 : 100;
+
+    if (raid.barFill) {
+      raid.barFill.style.width = `${remainingPct}%`;
+    }
+  }
+
+  async function fetchRaidState() {
+    const urls = [
+      `/api/raid?ts=${Date.now()}`,
+      `/raidState.json?ts=${Date.now()}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) continue;
+        const data = await res.json();
+
+        const normalized = normalizeRaidPayload(data);
+        lastRaidFetch = normalized;
+        lastServerNow = normalized.serverNow || Date.now();
+        lastClientNow = Date.now();
+
+        renderRaidFromState();
+        return;
+      } catch (_) {
+        // still
+      }
+    }
+
+    // Falls beide Endpoints failen -> Raid ausblenden (ohne Spam)
+    lastRaidFetch = { current: null, serverNow: Date.now() };
+    renderRaidFromState();
+  }
+
+  // =========================
+  // SPAWN RENDER
+  // =========================
+  async function tickSpawn() {
+    if (!spawn.card) return;
+
+    try {
+      const res = await fetch(`/api/spawn?ts=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const active = !!data.active && (data.endsAt || 0) > (data.serverNow || Date.now());
+
+      // Wenn Raid sichtbar ist, Spawn-Card ausblenden (optional Priorität Raid)
+      if (raidVisible) {
+        setSpawnVisible(false);
+        return;
+      }
+
+      if (!active) {
+        lastSpawnKey = "";
+        setSpawnVisible(false);
+        applyRarityClass(spawn.card, "unknown");
+        applyRarityClass(spawn.rarity, "unknown");
+        return;
+      }
+
+      const p = data.pokemon || {};
+      const remaining = Math.max(
+        0,
+        Math.ceil(((data.endsAt || 0) - (data.serverNow || Date.now())) / 1000)
+      );
+
+      if (spawn.timer) spawn.timer.textContent = remaining;
+
+      const key = `${p.displayName || p.name || ""}|${data.endsAt || 0}`;
+      if (key !== lastSpawnKey) {
+        lastSpawnKey = key;
+
+        if (spawn.name) spawn.name.textContent = p.displayName || p.name || "???";
+        if (spawn.rarity) spawn.rarity.textContent = String(p.rarity || "").toUpperCase();
+
+        applyRarityClass(spawn.card, p.rarity);
+        applyRarityClass(spawn.rarity, p.rarity);
+
+        const slug = slugifyGerman(p.name || p.displayName);
+        const localUrl = `/sprites/${slug}.png?ts=${Date.now()}`;
+        const url = p.spriteUrl || localUrl;
+
+        if (spawn.sprite) {
+          spawn.sprite.classList.toggle("shiny", !!p.isShiny);
+          spawn.sprite.src = url;
+          spawn.sprite.onerror = () => {
+            spawn.sprite.onerror = null;
+            spawn.sprite.src = "/sprites/pokeball.png?ts=" + Date.now();
+          };
+        }
+
+        setSpawnVisible(true);
+      }
+    } catch (_) {
+      // still
+    }
+  }
+
+  // =========================
+  // START
+  // =========================
+  // Initial fetches
+  fetchRaidState();
+  tickSpawn();
+
+  // Smooth countdown / HP UI
+  setInterval(renderRaidFromState, 250);
+
+  // Raid polling
+  setInterval(fetchRaidState, 1000);
+
+  // Spawn polling
+  setInterval(tickSpawn, 400);
+
+  // Tab zurück -> sofort refresh
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      fetchRaidState();
+      tickSpawn();
+    }
+  });
+})();
+</script>
+</body>
+
+</html>

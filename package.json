@@ -17,6 +17,7 @@
     "test:ranked-queue": "node scripts/test-ranked-queue.js",
     "test:ranked-chat": "node scripts/test-ranked-chat.js",
     "test:ranked-matchmaker": "node scripts/test-ranked-matchmaker.js",
+    "test:overlay-queue": "node scripts/test-overlay-event-queue.js",
     "analyze:battles": "node scripts/analyze-ten-battles.js",
     "sprites:battle": "node scripts/download-battle-sprites.js",
     "assign:natures": "node scripts/assign-natures.js",

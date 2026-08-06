@@ -11,6 +11,7 @@ const store = require("../lib/fileStore");
 const paths = require("../lib/paths");
 const rankedQueue = require("../lib/rankedQueue");
 const rankedBattleQueue = require("../lib/rankedBattleQueue");
+const overlayEventQueue = require("../lib/overlayEventQueue");
 
 const required = [
   "TWITCH_CLIENT_ID",
@@ -73,6 +74,7 @@ let gameEnabledSource = "Start";
 let spawnTimer = null;
 let raidTimer = null;
 let chatSendQueue = Promise.resolve();
+let overlayPumpBusy = false;
 
 const defaultRewardMap = {
   blattstein: "leaf_stone",
@@ -185,6 +187,7 @@ async function setGameEnabled(nextEnabled, options = {}) {
   if (changed) {
     const removed = rankedQueue.clearQueue(paths.RANKED_QUEUE_JSON, store.readJsonSafe);
     rankedBattleQueue.clear(paths.RANKED_BATTLE_JSON);
+    overlayEventQueue.clear(paths.OVERLAY_EVENT_QUEUE_JSON);
     console.log(`[ranked] Queue wegen Spiel-${gameEnabled ? "Start" : "Stopp"} beendet (${removed} Einträge)`);
   }
 
@@ -218,6 +221,7 @@ function initializeGameControl() {
   persistControlState();
   const removed = rankedQueue.clearQueue(paths.RANKED_QUEUE_JSON, store.readJsonSafe);
   rankedBattleQueue.clear(paths.RANKED_BATTLE_JSON);
+  overlayEventQueue.clear(paths.OVERLAY_EVENT_QUEUE_JSON);
   console.log(`[ranked] Queue beim Bot-Start bereinigt (${removed} Einträge)`);
   console.log(`[game] Startstatus: ${statusText()}`);
 }
@@ -233,9 +237,46 @@ function scheduleSpawnResolve() {
   spawnTimer = setTimeout(async () => {
     const output = await game.command("resolve", {}, "");
     if (gameEnabled && output.message) await sendChat(output.message);
+    const active = overlayEventQueue.claimHead(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, "spawn");
+    if (active) overlayEventQueue.complete(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, active.id);
     spawnTimer = null;
+    await pumpOverlayQueue();
   }, delay);
   console.log(`[timer] Spawn-Auflösung in ${Math.round(delay / 1000)}s`);
+}
+
+async function pumpOverlayQueue() {
+  if (overlayPumpBusy || !gameEnabled) return;
+  overlayPumpBusy = true;
+  try {
+    const head = overlayEventQueue.head(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson);
+    if (!head || !["spawn", "raid"].includes(head.type)) return;
+    const event = overlayEventQueue.claimHead(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, head.type);
+    if (!event || event.status !== "active") return;
+    if (head.type === "spawn") {
+      const current = game.getSpawnState();
+      if (current?.active && Number(current.endsAt || 0) > Date.now()) {
+        scheduleSpawnResolve();
+        return;
+      }
+    } else if (game.getRaidState()?.current) {
+      scheduleRaidResolve();
+      return;
+    }
+    const output = head.type === "spawn"
+      ? await game.startPreparedSpawn(event.payload)
+      : await game.startPreparedRaid(event.payload);
+    if (!output.result?.ok) {
+      overlayEventQueue.complete(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, event.id);
+      setImmediate(() => pumpOverlayQueue());
+      return;
+    }
+    if (output.message) await sendChat(output.message);
+    if (head.type === "spawn") scheduleSpawnResolve();
+    else scheduleRaidResolve();
+  } finally {
+    overlayPumpBusy = false;
+  }
 }
 
 function scheduleRaidResolve() {
@@ -249,7 +290,10 @@ function scheduleRaidResolve() {
   raidTimer = setTimeout(async () => {
     const output = await game.command("raidresolve", {}, "");
     if (gameEnabled && output.message) await sendChat(output.message);
+    const active = overlayEventQueue.claimHead(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, "raid");
+    if (active) overlayEventQueue.complete(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, active.id);
     raidTimer = null;
+    await pumpOverlayQueue();
   }, delay);
   console.log(`[timer] Raid-Auflösung in ${Math.round(delay / 1000)}s`);
 }
@@ -258,10 +302,7 @@ async function attemptAutoSpawn() {
   if (!gameEnabled) return;
   if (autoSpawnOnlyWhenLive && !streamLive) return;
   const output = await game.command("spawn", {}, "");
-  if (output.result?.ok && output.message) {
-    await sendChat(output.message);
-    scheduleSpawnResolve();
-  }
+  if (output.result?.ok) await pumpOverlayQueue();
 }
 
 function isAdmin(event) {
@@ -377,6 +418,7 @@ async function handleChatEvent(event) {
   const output = await game.command(command, user, rawInput);
   if (output.message) await sendChat(output.message);
   if (output.schedule === "spawn") scheduleSpawnResolve();
+  if (output.schedule === "overlay") await pumpOverlayQueue();
   if (output.schedule === "raid") scheduleRaidResolve();
 }
 
@@ -517,6 +559,7 @@ async function main() {
   // zum vorgesehenen Zeitpunkt still aufgelöst, damit kein Zustand hängen bleibt.
   scheduleSpawnResolve();
   scheduleRaidResolve();
+  setInterval(() => pumpOverlayQueue().catch((error) => console.error("[overlay-queue]", error)), 1000);
 
   await chatEventSub.start();
   await rewardEventSub.start();

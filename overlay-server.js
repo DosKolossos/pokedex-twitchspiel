@@ -7,6 +7,7 @@ const paths = require("./lib/paths");
 const rankedBattleQueue = require("./lib/rankedBattleQueue");
 const rankedMatchmaker = require("./lib/rankedMatchmaker");
 const rankedQueue = require("./lib/rankedQueue");
+const overlayEventQueue = require("./lib/overlayEventQueue");
 
 const app = express();
 const BASE = __dirname;
@@ -55,7 +56,11 @@ app.get("/api/raid", (_req, res) => {
 
 app.get("/api/ranked-battle", (_req, res) => {
   setNoCache(res);
-  res.json(rankedBattleQueue.claimNext(paths.RANKED_BATTLE_JSON, readJsonSafe));
+  const event = overlayEventQueue.claimHead(paths.OVERLAY_EVENT_QUEUE_JSON, readJsonSafe, "ranked");
+  if (!event) return res.json(null);
+  const battle = rankedBattleQueue.claimNext(paths.RANKED_BATTLE_JSON, readJsonSafe);
+  if (!battle || String(battle.id) !== String(event.battleId)) return res.json(null);
+  res.json(battle);
 });
 
 app.post("/api/ranked-battle/:id/complete", (req, res) => {
@@ -74,6 +79,7 @@ app.post("/api/ranked-battle/:id/complete", (req, res) => {
     outbox.messages = Array.isArray(outbox.messages) ? outbox.messages : [];
     outbox.messages.push({ message:`⚔️ ${job.winnerDisplay} gewinnt den Ranked-Kampf (+20 LP).`, createdAt:Date.now(), rankedBattleId:job.id });
     fs.writeFileSync(paths.CHAT_OUTBOX_JSON, JSON.stringify(outbox, null, 2));
+    overlayEventQueue.complete(paths.OVERLAY_EVENT_QUEUE_JSON, readJsonSafe, `ranked-${job.id}`);
   }
   res.json({ ok:true, alreadyCompleted:result.alreadyCompleted });
 });
