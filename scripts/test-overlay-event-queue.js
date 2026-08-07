@@ -33,8 +33,16 @@ assert.strictEqual(
   true,
   "Ein erstmals aktivierter Spawn muss gestartet werden"
 );
+// Regression v4.1.2: Nach dem Resolve muss der konkrete aktive Eintrag
+// abgeschlossen sein, bevor asynchrone Chat-Ausgaben beginnen. Dann kann die
+// Queue-Pumpe ihn in diesem Zwischenfenster nicht erneut starten.
+queue.enqueue(file, readJson, { id:"spawn-race", type:"spawn", payload:{ pokemon:{ name:"Krabby" } } });
+assert.strictEqual(queue.claimHead(file, readJson, "spawn"), null, "Raid bleibt vor dem späteren Spawn");
 assert.strictEqual(queue.claimHead(file, readJson, "raid").id, "raid-1");
 queue.complete(file, readJson, "raid-1");
+assert.strictEqual(queue.claimHead(file, readJson, "spawn").id, "spawn-race");
+queue.complete(file, readJson, "spawn-race");
+assert.strictEqual(queue.hasOpenType(file, readJson, "spawn"), false, "Aufgelöster Spawn sperrt !spawn nicht mehr");
 assert.strictEqual(queue.head(file, readJson), null);
 
 fs.rmSync(dir, { recursive:true, force:true });

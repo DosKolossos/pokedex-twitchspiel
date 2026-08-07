@@ -226,23 +226,54 @@ function initializeGameControl() {
   console.log(`[game] Startstatus: ${statusText()}`);
 }
 
-function scheduleSpawnResolve() {
+function scheduleSpawnResolve(eventId = null) {
   // Die Queue-Pumpe läuft jede Sekunde. Ein bereits geplanter Resolve darf
   // dabei nicht fortlaufend gelöscht und neu angelegt werden.
   if (spawnTimer) return;
   const state = game.getSpawnState();
   if (!state?.active || !state?.pokemon) return;
+  const queuedEvent = overlayEventQueue.head(
+    paths.OVERLAY_EVENT_QUEUE_JSON,
+    store.readJson
+  );
+  const boundEventId = eventId || (
+    queuedEvent?.type === "spawn" && queuedEvent.status === "active"
+      ? queuedEvent.id
+      : null
+  );
   const delay = Math.max(
     0,
     Number(state.endsAt || 0) + spawnGraceMs - Date.now()
   );
   spawnTimer = setTimeout(async () => {
-    const output = await game.command("resolve", {}, "");
-    if (gameEnabled && output.message) await sendChat(output.message);
-    const active = overlayEventQueue.claimHead(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, "spawn");
-    if (active) overlayEventQueue.complete(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, active.id);
-    spawnTimer = null;
-    await pumpOverlayQueue();
+    try {
+      const output = await game.command("resolve", {}, "");
+
+      // Den Queue-Eintrag unmittelbar nach dem Zurücksetzen von spawn.json
+      // abschließen. Würden wir zuerst auf Twitch/sendChat warten, könnte die
+      // sekündliche Queue-Pumpe denselben nun inaktiven Spawn erneut starten.
+      const active = overlayEventQueue.claimHead(
+        paths.OVERLAY_EVENT_QUEUE_JSON,
+        store.readJson,
+        "spawn"
+      );
+      const completedId = boundEventId || active?.id;
+      if (active && completedId && String(active.id) === String(completedId)) {
+        overlayEventQueue.complete(
+          paths.OVERLAY_EVENT_QUEUE_JSON,
+          store.readJson,
+          completedId
+        );
+      }
+
+      spawnTimer = null;
+      if (gameEnabled && output.message) await sendChat(output.message);
+      await pumpOverlayQueue();
+    } catch (error) {
+      spawnTimer = null;
+      console.error("[spawn-resolve]", error);
+      await pumpOverlayQueue();
+    }
   }, delay);
   console.log(`[timer] Spawn-Auflösung in ${Math.round(delay / 1000)}s`);
 }
@@ -262,7 +293,7 @@ async function pumpOverlayQueue() {
       // gestartet werden, sonst erhält er neue 60 Sekunden und wird nochmals
       // im Chat angekündigt.
       if (!overlayEventQueue.spawnNeedsStart(event, current)) {
-        scheduleSpawnResolve();
+        scheduleSpawnResolve(event.id);
         return;
       }
     } else if (game.getRaidState()?.current) {
@@ -278,7 +309,7 @@ async function pumpOverlayQueue() {
       return;
     }
     if (output.message) await sendChat(output.message);
-    if (head.type === "spawn") scheduleSpawnResolve();
+    if (head.type === "spawn") scheduleSpawnResolve(event.id);
     else scheduleRaidResolve();
   } finally {
     overlayPumpBusy = false;
