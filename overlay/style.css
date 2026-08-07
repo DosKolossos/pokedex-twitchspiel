@@ -13,7 +13,7 @@ html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:transpar
 .rarity-pill{display:inline-flex;align-items:center;justify-content:center;padding:8px 13px;border-radius:9px;font-size:18px;font-weight:950;letter-spacing:1px;text-transform:uppercase;border:1px solid currentColor;white-space:nowrap;box-shadow:inset 0 -2px rgba(0,0,0,.13)}
 .img{position:absolute;inset:0;transform:translate(55px,-18px) scale(.82);opacity:0;transition:transform .55s cubic-bezier(.17,.84,.28,1.18),opacity .35s ease}
 .card.show .img{transform:translate(0,0) scale(1);opacity:1}
-.img img{position:absolute;left:890px;top:232px;width:220px;height:220px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 16px 12px rgba(0,0,0,.42));animation:spawnFloat 2.8s ease-in-out infinite;transform-origin:center}
+.img img{position:absolute;left:890px;top:232px;width:220px;height:220px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 16px 12px rgba(0,0,0,.42));transform-origin:center}
 .img img.sprite-measured{left:var(--sprite-left);top:var(--sprite-top);width:var(--sprite-width);height:auto;object-fit:fill}
 .img img.shiny{filter:drop-shadow(0 20px 16px rgba(0,0,0,.42)) drop-shadow(0 0 20px rgba(255,246,166,.9))}
 .spawn-action{position:absolute;left:50%;bottom:34px;display:flex;align-items:center;gap:18px;padding:14px 22px;border-radius:18px;background:rgba(8,17,29,.94);border:2px solid rgba(255,255,255,.16);box-shadow:0 12px 30px rgba(0,0,0,.4);transform:translate(-50%,22px);opacity:0;transition:transform .4s .12s ease,opacity .3s .12s ease;white-space:nowrap}
@@ -24,7 +24,6 @@ html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:transpar
 .hint b{font-weight:950;color:#fff}
 .catch-pokeball{position:relative;width:34px;height:34px;flex:0 0 34px;overflow:hidden;border:3px solid #26323d;border-radius:50%;background:linear-gradient(#e53b42 0 43%,#26323d 43% 57%,#f3f5f6 57% 100%);box-shadow:0 3px 0 rgba(142,154,163,.9),0 3px 7px rgba(0,0,0,.35)}
 .catch-pokeball::after{content:"";position:absolute;left:50%;top:50%;width:10px;height:10px;box-sizing:border-box;border:2px solid #26323d;border-radius:50%;background:#e9edf0;transform:translate(-50%,-50%)}
-@keyframes spawnFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-6px) rotate(1deg)}}
 
 /* Seltenheit: Badge und dezenter HUD-Schein verwenden dieselbe Farbe */
 .card.rarity-common{--accent:#d0d0d0;--accent-glow:rgba(255,255,255,.18)}
@@ -54,12 +53,11 @@ html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:transpar
 .raid-bar-fill{position:absolute;inset:0 auto 0 0;width:100%;border-radius:inherit;background:linear-gradient(90deg,var(--raid-accent),#d8ffdb);transition:width 180ms linear}
 .raid-join-hint{position:absolute;left:50%;bottom:-116px;transform:translateX(-50%);min-width:360px;padding:14px 22px;border-radius:17px;background:rgba(8,17,29,.94);border:2px solid rgba(255,255,255,.16);box-shadow:0 12px 30px rgba(0,0,0,.4);font-size:30px;font-weight:950;text-align:center}
 .raid-right{position:absolute;inset:0}
-.raid-boss-img{position:absolute;left:890px;top:232px;width:220px;height:220px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 16px 12px rgba(0,0,0,.42));animation:raidFloat 2.6s ease-in-out infinite}
+.raid-boss-img{position:absolute;left:890px;top:232px;width:220px;height:220px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 16px 12px rgba(0,0,0,.42))}
 .raid-boss-img.sprite-measured{left:var(--sprite-left);top:var(--sprite-top);width:var(--sprite-width);height:auto;object-fit:fill}
 .raid-overlay.raid-enter .raid-left{animation:hudIn .45s ease both}.raid-overlay.raid-enter .raid-right{animation:bossIn .55s cubic-bezier(.17,.84,.28,1.18) both}.raid-overlay.raid-enter .raid-join-hint{animation:joinIn .45s .12s ease both}
 .raid-panel.theme-easy{--raid-accent:#58d95b}.raid-panel.theme-normal{--raid-accent:#5f91ed}.raid-panel.theme-hard{--raid-accent:#e08a30}.raid-panel.theme-epic{--raid-accent:#9b59d0}.raid-panel.theme-legendary{--raid-accent:#e05252}
 .tier-easy{background:#4b8f6a}.tier-normal{background:#4f72c9}.tier-hard{background:#a56a2b}.tier-epic{background:#7a44c9}.tier-legendary{background:#c94444}
-@keyframes raidFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-6px) scale(1.02)}}
 @keyframes hudIn{from{opacity:0;transform:translateX(-25px)}to{opacity:1;transform:none}}
 @keyframes bossIn{from{opacity:0;transform:translate(55px,-22px) scale(.82)}to{opacity:1;transform:none}}
 @keyframes joinIn{from{opacity:0;transform:translate(-50%,22px)}to{opacity:1;transform:translate(-50%,0)}}
