@@ -94,41 +94,50 @@ app.post("/api/ranked-battle/:id/complete", (req, res) => {
   setNoCache(res);
   const result = rankedBattleQueue.complete(paths.RANKED_BATTLE_JSON, readJsonSafe, req.params.id);
   if (!result.ok) return res.status(result.reason === "not_found" ? 404 : 409).json(result);
+  const job = result.job;
   if (!result.alreadyCompleted) {
-    const job = result.job;
     const profiles = readJsonSafe(paths.PROFILES_JSON, { users: {} });
     rankedMatchmaker.finalize(job, profiles);
     fs.writeFileSync(paths.PROFILES_JSON, JSON.stringify(profiles, null, 2));
     const queue = rankedQueue.readQueue(paths.RANKED_QUEUE_JSON, readJsonSafe);
     for (const player of job.players || []) delete queue.entries[String(player.userId)];
     rankedQueue.writeQueue(paths.RANKED_QUEUE_JSON, queue);
+  }
+
+  // Diese Bereinigung muss idempotent sein. Falls ein früherer Request nach
+  // dem Markieren des Jobs abgebrochen ist, darf ein Retry den aktiven
+  // Overlay-Eintrag nicht dauerhaft stehen lassen.
+  const activeEvent = overlayEventQueue.head(paths.OVERLAY_EVENT_QUEUE_JSON, readJsonSafe);
+  if (
+    activeEvent?.type === "ranked" &&
+    activeEvent.status === "active" &&
+    String(activeEvent.battleId) === String(job.id)
+  ) {
+    overlayEventQueue.complete(
+      paths.OVERLAY_EVENT_QUEUE_JSON,
+      readJsonSafe,
+      activeEvent.id
+    );
+  }
+  // Der ausführliche Kampf bleibt unter rankedBattleLogs erhalten. Im
+  // Live-State darf nach dem bestätigten Abschluss nichts Altes verbleiben.
+  rankedBattleQueue.purgeCompleted(
+    paths.RANKED_BATTLE_JSON,
+    readJsonSafe,
+    job.id
+  );
+
+  if (!result.alreadyCompleted) {
     const outbox = readJsonSafe(paths.CHAT_OUTBOX_JSON, { messages: [] });
     outbox.messages = Array.isArray(outbox.messages) ? outbox.messages : [];
-    outbox.messages.push({
-      message: `⚔️ ${job.winnerDisplay} gewinnt den Ranked-Kampf (+20 LP).`,
-      createdAt: Date.now(),
-      rankedBattleId: job.id,
-    });
-    fs.writeFileSync(paths.CHAT_OUTBOX_JSON, JSON.stringify(outbox, null, 2));
-    const activeEvent = overlayEventQueue.head(paths.OVERLAY_EVENT_QUEUE_JSON, readJsonSafe);
-    if (
-      activeEvent?.type === "ranked" &&
-      activeEvent.status === "active" &&
-      String(activeEvent.battleId) === String(job.id)
-    ) {
-      overlayEventQueue.complete(
-        paths.OVERLAY_EVENT_QUEUE_JSON,
-        readJsonSafe,
-        activeEvent.id
-      );
+    if (!outbox.messages.some((entry) => String(entry?.rankedBattleId) === String(job.id))) {
+      outbox.messages.push({
+        message: `⚔️ ${job.winnerDisplay} gewinnt den Ranked-Kampf (+20 LP).`,
+        createdAt: Date.now(),
+        rankedBattleId: job.id,
+      });
+      fs.writeFileSync(paths.CHAT_OUTBOX_JSON, JSON.stringify(outbox, null, 2));
     }
-    // Der ausführliche Kampf bleibt unter rankedBattleLogs erhalten. Im
-    // Live-State darf nach dem bestätigten Abschluss nichts Altes verbleiben.
-    rankedBattleQueue.purgeCompleted(
-      paths.RANKED_BATTLE_JSON,
-      readJsonSafe,
-      job.id
-    );
   }
   res.json({ ok: true, alreadyCompleted: result.alreadyCompleted });
 });

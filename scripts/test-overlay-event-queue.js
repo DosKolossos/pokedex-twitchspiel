@@ -53,5 +53,14 @@ assert.strictEqual(battleQueue.complete(battleFile, readJson, "battle-cleanup").
 assert.strictEqual(battleQueue.purgeCompleted(battleFile, readJson, "battle-cleanup").removed, 1);
 assert.deepStrictEqual(battleQueue.read(battleFile, readJson).jobs, [], "Nach der Endanimation muss der Live-Kampf-State leer sein");
 
+// Regression v4.1.4: Nach einem vollständig entfernten ersten Kampf muss der
+// unmittelbar danach eingereihte zweite Kampf wieder claimbar sein.
+battleQueue.enqueue(battleFile, readJson, { id:"battle-first", players:[], simulation:{ log:[] } });
+battleQueue.enqueue(battleFile, readJson, { id:"battle-second", players:[], simulation:{ log:[] } });
+assert.strictEqual(battleQueue.claimNext(battleFile, readJson).id, "battle-first");
+assert.strictEqual(battleQueue.complete(battleFile, readJson, "battle-first").ok, true);
+assert.strictEqual(battleQueue.purgeCompleted(battleFile, readJson, "battle-first").removed, 1);
+assert.strictEqual(battleQueue.claimNext(battleFile, readJson).id, "battle-second", "Der zweite Ranked-Kampf muss nach dem ersten starten");
+
 fs.rmSync(dir, { recursive:true, force:true });
 console.log("✓ Overlay-Queue arbeitet strikt FIFO und sperrt wartende Spawns");
