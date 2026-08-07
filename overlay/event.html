@@ -90,6 +90,12 @@
   let lastServerNow = 0;
   let lastClientNow = 0;
   let raidVisible = false;
+  const SPRITE_STAGE = {
+    anchorX: 1000,
+    anchorY: 452,
+    targetSize: 150,
+    maxScale: 3
+  };
 
   // =========================
   // HELPERS
@@ -120,7 +126,82 @@
     return Number.isFinite(dexId) && dexId > 0 ? dexId : 0;
   }
 
-  function setGen5Sprite(img, dexId, shiny, legacyUrl) {
+  function findVisibleBounds(img) {
+    const width = img.naturalWidth || 0;
+    const height = img.naturalHeight || 0;
+    if (!width || !height) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+
+    try {
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      const pixels = ctx.getImageData(0, 0, width, height).data;
+      let left = width;
+      let right = -1;
+      let top = height;
+      let bottom = -1;
+
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (pixels[((y * width) + x) * 4 + 3] < 12) continue;
+          if (x < left) left = x;
+          if (x > right) right = x;
+          if (y < top) top = y;
+          if (y > bottom) bottom = y;
+        }
+      }
+
+      if (right < left || bottom < top) return null;
+      return { left, right, top, bottom, width, height };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function placeVisibleSprite(img, identity) {
+    const bounds = findVisibleBounds(img);
+    if (!bounds) {
+      img.classList.remove("sprite-measured");
+      if (identity) identity.classList.remove("identity-measured");
+      return;
+    }
+
+    const visibleWidth = bounds.right - bounds.left + 1;
+    const visibleHeight = bounds.bottom - bounds.top + 1;
+    const scale = Math.min(
+      SPRITE_STAGE.maxScale,
+      SPRITE_STAGE.targetSize / Math.max(visibleWidth, visibleHeight)
+    );
+    const visibleCenterX = (bounds.left + bounds.right + 1) / 2;
+    const imageLeft = SPRITE_STAGE.anchorX - (visibleCenterX * scale);
+    const imageTop = SPRITE_STAGE.anchorY - ((bounds.bottom + 1) * scale);
+
+    img.style.setProperty("--sprite-width", `${bounds.width * scale}px`);
+    img.style.setProperty("--sprite-left", `${imageLeft}px`);
+    img.style.setProperty("--sprite-top", `${imageTop}px`);
+    img.classList.add("sprite-measured");
+
+    if (identity) {
+      requestAnimationFrame(() => {
+        const identityWidth = identity.offsetWidth || 360;
+        const visibleLeft = imageLeft + (bounds.left * scale);
+        const visibleTop = imageTop + (bounds.top * scale);
+        const visibleHeightPx = visibleHeight * scale;
+        const left = Math.max(24, visibleLeft - identityWidth - 20);
+        const top = Math.max(24, visibleTop + (visibleHeightPx - identity.offsetHeight) / 2);
+        identity.style.setProperty("--identity-left", `${left}px`);
+        identity.style.setProperty("--identity-top", `${top}px`);
+        identity.classList.add("identity-measured");
+      });
+    }
+  }
+
+  function setGen5Sprite(img, dexId, shiny, legacyUrl, identity) {
     if (!img) return;
     const variant = shiny ? "shiny/" : "";
     const candidates = dexId ? [
@@ -132,6 +213,10 @@
     candidates.push("/sprites/pokeball.png?ts=" + Date.now());
 
     let index = 0;
+    img.classList.remove("sprite-measured");
+    if (identity) identity.classList.remove("identity-measured");
+    img.crossOrigin = "anonymous";
+    img.onload = () => placeVisibleSprite(img, identity);
     img.onerror = () => {
       index += 1;
       if (index < candidates.length) img.src = candidates[index];
@@ -356,7 +441,7 @@
       const bossDexId = getDexId(current?.boss || current?.pokemon);
       const spriteKey = `${bossDexId}|${bossImage}`;
       if ((bossDexId || bossImage) && raid.bossImage.dataset.src !== spriteKey) {
-        setGen5Sprite(raid.bossImage, bossDexId, false, bossImage);
+        setGen5Sprite(raid.bossImage, bossDexId, false, bossImage, document.querySelector("#raid-card .raid-left"));
         raid.bossImage.dataset.src = spriteKey;
       }
       // kein hartes Leeren, damit's nicht blinkt
@@ -453,7 +538,7 @@
 
         if (spawn.sprite) {
           spawn.sprite.classList.toggle("shiny", !!p.isShiny);
-          setGen5Sprite(spawn.sprite, dexId, !!p.isShiny, p.spriteUrl || localUrl);
+          setGen5Sprite(spawn.sprite, dexId, !!p.isShiny, p.spriteUrl || localUrl, spawn.card.querySelector(".spawn-identity"));
         }
 
         setSpawnVisible(true);
