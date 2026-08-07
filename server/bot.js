@@ -353,7 +353,10 @@ function isAdmin(event) {
 }
 
 function parseCommand(message) {
-  const trimmed = String(message || "").trim();
+  const trimmed = String(message || "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .trim();
   if (!trimmed.startsWith("!")) return null;
   const [head, ...parts] = trimmed.split(/\s+/);
   return {

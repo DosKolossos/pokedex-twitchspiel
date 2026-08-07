@@ -99,13 +99,13 @@ class GameAdapter {
     switch (command) {
       case "spawn": {
         if (overlayEventQueue.hasOpenType(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, "spawn")) {
-          return { result: { ok:false, reason:"spawn_queued" }, message: rawInput ? "⏳ Ein Spawn wartet bereits oder läuft gerade." : "" };
+          return { result: { ok:false, reason:"spawn_queued" }, message: rawInput ? "🔴⚪ Es ist bereits ein Spawn vorgemerkt." : "" };
         }
         const prepared = rawInput ? spawn.prepareManual(prefix(rawInput, "spawn")) : spawn.prepareAuto();
         if (!prepared.ok) return { result: prepared, message: rawInput ? text(paths.SPAWN_MESSAGE_TXT) : "" };
         const id = `spawn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         overlayEventQueue.enqueue(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, { id, type:"spawn", payload:prepared });
-        return { result: { ok:true, queued:true, id }, message: rawInput ? "⏳ Der Spawn wurde in die Overlay-Queue eingereiht." : "", schedule:"overlay" };
+        return { result: { ok:true, queued:true, id }, message:"", schedule:"overlay" };
       }
       case "catch": {
         const result = catching.handleCatch({ userId, userName });
@@ -115,7 +115,7 @@ class GameAdapter {
         const result = catching.resolveCatch();
         let message = "";
         if (!result?.ok) {
-          if (result?.reason === "no_participants") message = "😶 Das wilde Pokémon verschwindet wieder im hohen Gras.";
+          if (result?.reason === "no_participants") message = "";
           else if (result?.reason !== "no_spawn") message = "⚠️ Resolve fehlgeschlagen.";
         } else {
           const award = awardCatch(result.winner, result.pokemon);
@@ -174,7 +174,7 @@ class GameAdapter {
         }
         const id = `raid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         overlayEventQueue.enqueue(paths.OVERLAY_EVENT_QUEUE_JSON, store.readJson, { id, type:"raid", payload:{ userId, userName, rawInput } });
-        return { result:{ ok:true, queued:true, id }, message:"⏳ Der Raid wurde in die Overlay-Queue eingereiht.", schedule:"overlay" };
+        return { result:{ ok:true, queued:true, id }, message:"", schedule:"overlay" };
       }
       case "raidresolve": {
         const result = raid.resolveRaid();

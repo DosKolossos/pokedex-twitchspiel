@@ -95,9 +95,10 @@ app.post("/api/ranked-battle/:id/complete", (req, res) => {
   const result = rankedBattleQueue.complete(paths.RANKED_BATTLE_JSON, readJsonSafe, req.params.id);
   if (!result.ok) return res.status(result.reason === "not_found" ? 404 : 409).json(result);
   const job = result.job;
+  let rankedSummary = null;
   if (!result.alreadyCompleted) {
     const profiles = readJsonSafe(paths.PROFILES_JSON, { users: {} });
-    rankedMatchmaker.finalize(job, profiles);
+    rankedSummary = rankedMatchmaker.finalize(job, profiles).summary;
     fs.writeFileSync(paths.PROFILES_JSON, JSON.stringify(profiles, null, 2));
     const queue = rankedQueue.readQueue(paths.RANKED_QUEUE_JSON, readJsonSafe);
     for (const player of job.players || []) delete queue.entries[String(player.userId)];
@@ -131,8 +132,16 @@ app.post("/api/ranked-battle/:id/complete", (req, res) => {
     const outbox = readJsonSafe(paths.CHAT_OUTBOX_JSON, { messages: [] });
     outbox.messages = Array.isArray(outbox.messages) ? outbox.messages : [];
     if (!outbox.messages.some((entry) => String(entry?.rankedBattleId) === String(job.id))) {
+      const winner = rankedSummary?.winner;
+      const loser = rankedSummary?.loser;
+      const rankNote = (entry) => entry?.promoted
+        ? ` · Aufstieg: ${entry.rank.division}`
+        : entry?.demoted ? ` · Abstieg: ${entry.rank.division}` : "";
+      const message = winner && loser
+        ? `⚔️ ${winner.display} gewinnt den Ranked-Kampf! 🏆 ${winner.display}: +20 LP → ${winner.rank.division} ${winner.rank.lp} LP · Elo +15 → ${winner.rank.mmr}${rankNote(winner)} | ${loser.display}: -15 LP → ${loser.rank.division} ${loser.rank.lp} LP · Elo -15 → ${loser.rank.mmr}${rankNote(loser)}`
+        : `⚔️ ${job.winnerDisplay} gewinnt den Ranked-Kampf (+20 LP).`;
       outbox.messages.push({
-        message: `⚔️ ${job.winnerDisplay} gewinnt den Ranked-Kampf (+20 LP).`,
+        message,
         createdAt: Date.now(),
         rankedBattleId: job.id,
       });

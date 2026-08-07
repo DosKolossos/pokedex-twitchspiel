@@ -171,7 +171,7 @@ try {
 
       if (!res?.ok) {
         if (res?.reason === "no_participants") {
-          writeResolveMessage("😶 Das wilde Pokémon verschwindet wieder im hohen Gras.");
+          writeResolveMessage("");
           return res;
         }
         if (res?.reason === "no_spawn") {
