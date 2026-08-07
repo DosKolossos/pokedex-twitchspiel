@@ -1,15 +1,32 @@
 html,
 body {
   margin: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
   background: transparent;
   font-family: system-ui, Segoe UI, Arial;
 }
 
 .wrap {
   position: relative;
-  width: 1000px;
-  height: 350px;
+  width: 1280px;
+  height: 720px;
   overflow: hidden;
+}
+
+/*
+ * Spawn und Raid teilen sich dieselbe 1280x720-Bühne wie das Kampfoverlay.
+ * Die vorhandenen Event-Layouts werden gemeinsam proportional vergrößert,
+ * damit Abstände, Typografie und Animationen unverändert zusammenspielen.
+ */
+.event-stage {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 853.3333px;
+  height: 480px;
+  transform: scale(1.5);
+  transform-origin: left top;
 }
 
 /* =========================

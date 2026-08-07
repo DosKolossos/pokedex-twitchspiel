@@ -12,22 +12,23 @@
 
 <body>
   <div class="wrap">
-    <div id="card" class="card">
-      <div class="img"><img id="sprite" alt="" /></div>
-      <div>
-        <div class="title" id="name">Pokémon</div>
-        <div class="meta">
-          <span id="rarity">RARITY</span>
-          <span class="pill">⏱️ <span class="timer" id="timer">60</span>s</span>
+    <div class="event-stage">
+      <div id="card" class="card">
+        <div class="img"><img id="sprite" alt="" /></div>
+        <div>
+          <div class="title" id="name">Pokémon</div>
+          <div class="meta">
+            <span id="rarity">RARITY</span>
+            <span class="pill">⏱️ <span class="timer" id="timer">60</span>s</span>
+          </div>
+          <div class="hint">🥎 Tippe <b>!catch</b> um teilzunehmen</div>
         </div>
-        <div class="hint">🥎 Tippe <b>!catch</b> um teilzunehmen</div>
       </div>
-    </div>
-    <div id="raid-card" class="raid-overlay" style="display:none;">
-      <div class="raid-panel">
-        <div class="raid-content">
-          <div class="raid-left">
-            <div id="raidBossName" class="raid-title">RAIDBOSS</div>
+      <div id="raid-card" class="raid-overlay" style="display:none;">
+        <div class="raid-panel">
+          <div class="raid-content">
+            <div class="raid-left">
+              <div id="raidBossName" class="raid-title">RAIDBOSS</div>
 
             <div class="raid-meta">
               <span id="raidTier" class="raid-pill tier-easy">EASY</span>
@@ -45,8 +46,9 @@
             <div class="raid-join-hint">!raid join</div>
           </div>
 
-          <div class="raid-right">
-            <img id="raidBossImage" class="raid-boss-img" alt="Raidboss" />
+            <div class="raid-right">
+              <img id="raidBossImage" class="raid-boss-img" alt="Raidboss" />
+            </div>
           </div>
         </div>
       </div>
