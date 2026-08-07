@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const queue = require("../lib/overlayEventQueue");
+const battleQueue = require("../lib/rankedBattleQueue");
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pokedex-overlay-queue-"));
 const file = path.join(dir, "queue.json");
@@ -44,6 +45,13 @@ assert.strictEqual(queue.claimHead(file, readJson, "spawn").id, "spawn-race");
 queue.complete(file, readJson, "spawn-race");
 assert.strictEqual(queue.hasOpenType(file, readJson, "spawn"), false, "Aufgelöster Spawn sperrt !spawn nicht mehr");
 assert.strictEqual(queue.head(file, readJson), null);
+
+const battleFile = path.join(dir, "rankedBattle.json");
+battleQueue.enqueue(battleFile, readJson, { id:"battle-cleanup", players:[], simulation:{ log:[] } });
+assert.strictEqual(battleQueue.claimNext(battleFile, readJson).id, "battle-cleanup");
+assert.strictEqual(battleQueue.complete(battleFile, readJson, "battle-cleanup").ok, true);
+assert.strictEqual(battleQueue.purgeCompleted(battleFile, readJson, "battle-cleanup").removed, 1);
+assert.deepStrictEqual(battleQueue.read(battleFile, readJson).jobs, [], "Nach der Endanimation muss der Live-Kampf-State leer sein");
 
 fs.rmSync(dir, { recursive:true, force:true });
 console.log("✓ Overlay-Queue arbeitet strikt FIFO und sperrt wartende Spawns");

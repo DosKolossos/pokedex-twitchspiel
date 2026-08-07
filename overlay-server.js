@@ -80,6 +80,7 @@ app.post("/api/ranked-battle/:id/complete", (req, res) => {
     outbox.messages.push({ message:`⚔️ ${job.winnerDisplay} gewinnt den Ranked-Kampf (+20 LP).`, createdAt:Date.now(), rankedBattleId:job.id });
     fs.writeFileSync(paths.CHAT_OUTBOX_JSON, JSON.stringify(outbox, null, 2));
     overlayEventQueue.complete(paths.OVERLAY_EVENT_QUEUE_JSON, readJsonSafe, `ranked-${job.id}`);
+    rankedBattleQueue.purgeCompleted(paths.RANKED_BATTLE_JSON, readJsonSafe, job.id);
   }
   res.json({ ok:true, alreadyCompleted:result.alreadyCompleted });
 });

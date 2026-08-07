@@ -7,7 +7,7 @@
   const speed = Math.max(.25, Number(new URLSearchParams(location.search).get("speed")) || 1);
   const $ = (selector, root = document) => root.querySelector(selector);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms * speed));
-  const dom = { left:$("#playerMon"),right:$("#enemyMon"),leftPanel:$("#playerPanel"),rightPanel:$("#enemyPanel"),leftTeam:$("#teamLeft"),rightTeam:$("#teamRight"),leftTrainer:$("#trainerLeft strong"),rightTrainer:$("#trainerRight strong"),message:$("#message"),turn:$("#turn"),damage:$("#damage"),effect:$("#effect"),winner:$("#winner") };
+  const dom = { battle:$("#battle"),left:$("#playerMon"),right:$("#enemyMon"),leftPanel:$("#playerPanel"),rightPanel:$("#enemyPanel"),leftTeam:$("#teamLeft"),rightTeam:$("#teamRight"),leftTrainer:$("#trainerLeft strong"),rightTrainer:$("#trainerRight strong"),message:$("#message"),turn:$("#turn"),damage:$("#damage"),effect:$("#effect"),winner:$("#winner") };
   let token = 0;
 
   function makeMon(input, side, index) { const descriptor=typeof input==="object"&&input?input:{id:input},species=lab.SPECIES[descriptor.id],level=Math.max(1,Math.min(100,Number(descriptor.level||50))),stats=lab.stats(species.base,level,species.nature);return{id:descriptor.id,instanceId:String(descriptor.instanceId||`${side}:${index}`),side,index,name:descriptor.name||species.name,dexId:Number(descriptor.dexId||species.dexId),level,maxHp:stats.hp,hp:stats.hp,status:null,fainted:false}; }
@@ -54,11 +54,23 @@
     );
   }
   function renderActive(state,side,enter=false){const mon=active(state,side),box=side?dom.right:dom.left,panel=side?dom.rightPanel:dom.leftPanel,img=$("img",box);box.style.opacity="";box.className=`combatant combatant-${side?"enemy":"player"}`;installImage(img,sprite(mon,!side),spriteFallback(mon,!side));renderPanel(panel,mon);if(enter)playEntry(box,side);renderTeam(state,side);}
+  function clearBattleView(){
+    dom.battle.style.visibility="hidden";
+    dom.winner.hidden=true;
+    dom.winner.textContent="";
+    dom.message.textContent="";
+    dom.turn.textContent="";
+    dom.leftTrainer.textContent="";
+    dom.rightTrainer.textContent="";
+    dom.leftTeam.replaceChildren();
+    dom.rightTeam.replaceChildren();
+    for(const node of [dom.left,dom.right,dom.leftPanel,dom.rightPanel]) node.style.opacity="0";
+  }
   async function playMove(state,event){const attackerBox=event.side?dom.right:dom.left,defenderBox=event.side?dom.left:dom.right;dom.message.textContent=`${event.attacker.name} benutzt ${event.move?.name||"eine Attacke"}.`;attackerBox.classList.add(event.side?"attack-right":"attack-left");dom.effect.className=`move-effect ${event.move?.type||"normal"} ${event.side?"to-player":"to-enemy"}`;await sleep(460);const defender=findMon(state,event.defender.name);defender.hp=event.after;defenderBox.classList.add("hit");renderPanel(defender.side?dom.rightPanel:dom.leftPanel,defender,!defender.side);await sleep(780);attackerBox.classList.remove("attack-left","attack-right");defenderBox.classList.remove("hit");}
 
   async function loadRankedBattle(){try{const response=await fetch("/api/ranked-battle",{cache:"no-store"});if(!response.ok)return false;const battle=await response.json();if(!battle?.id||!battle?.simulation)return false;currentBattleId=battle.id;scenario={seed:battle.seed,teamA:battle.battleTeams?.[0]||scenario.teamA,teamB:battle.battleTeams?.[1]||scenario.teamB};playerNames=[battle.players?.[0]?.display||"Team Blau",battle.players?.[1]?.display||"Team Rot"];dom.leftTrainer.textContent=playerNames[0];dom.rightTrainer.textContent=playerNames[1];serverResult=battle.simulation;return true;}catch(error){console.warn("Ranked-Kampf konnte nicht geladen werden",error);return false;}}
-  async function completeRankedBattle(){if(!currentBattleId)return;try{await fetch(`/api/ranked-battle/${encodeURIComponent(currentBattleId)}/complete`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});}catch(error){console.warn("Kampfabschluss konnte nicht bestätigt werden",error);}}
-  async function run(){const found=await loadRankedBattle();if(!found){dom.message.textContent="Warte auf den nächsten Ranked-Kampf …";dom.turn.textContent="BEREIT";setTimeout(run,2000);return;}const runToken=++token,result=serverResult,events=eventsFrom(result),state={teams:freshTeams(),active:[0,0]};dom.winner.hidden=true;dom.turn.textContent="KAMPFBEGINN";renderActive(state,0,true);renderActive(state,1,true);await sleep(700);
+  async function completeRankedBattle(){if(!currentBattleId)return false;try{const response=await fetch(`/api/ranked-battle/${encodeURIComponent(currentBattleId)}/complete`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});return response.ok;}catch(error){console.warn("Kampfabschluss konnte nicht bestätigt werden",error);return false;}}
+  async function run(){const found=await loadRankedBattle();if(!found){clearBattleView();setTimeout(run,2000);return;}const runToken=++token,result=serverResult,events=eventsFrom(result),state={teams:freshTeams(),active:[0,0]};dom.battle.style.visibility="visible";for(const node of [dom.left,dom.right,dom.leftPanel,dom.rightPanel]) node.style.opacity="";dom.winner.hidden=true;dom.turn.textContent="KAMPFBEGINN";renderActive(state,0,true);renderActive(state,1,true);await sleep(700);
     for(const event of events){if(runToken!==token)return;
       if(event.type==="turn"){dom.turn.textContent=`ZUG ${event.turn}`;await sleep(320);}
       else if(event.type==="switch"){dom.message.textContent=event.text;const old=event.side?dom.right:dom.left;old.style.opacity="0";await sleep(320);state.active[event.side]=event.to.index;renderActive(state,event.side,true);await sleep(650);}
@@ -69,8 +81,9 @@
       else if(event.type==="message"){dom.message.textContent=event.text;await sleep(800);}
       else if(event.type==="winner"){dom.winner.textContent=event.text;dom.winner.hidden=false;await sleep(1200);}
     }
-    if(runToken===token){await completeRankedBattle();currentBattleId=null;serverResult=null;setTimeout(run,2000);}
+    if(runToken===token){const completed=await completeRankedBattle();if(completed){currentBattleId=null;serverResult=null;clearBattleView();}setTimeout(run,2000);}
   }
   $("#replay")?.addEventListener("click",()=>{if(!currentBattleId)run();});
+  clearBattleView();
   run();
 })();

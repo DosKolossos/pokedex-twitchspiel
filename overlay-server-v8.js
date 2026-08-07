@@ -122,6 +122,13 @@ app.post("/api/ranked-battle/:id/complete", (req, res) => {
         activeEvent.id
       );
     }
+    // Der ausführliche Kampf bleibt unter rankedBattleLogs erhalten. Im
+    // Live-State darf nach dem bestätigten Abschluss nichts Altes verbleiben.
+    rankedBattleQueue.purgeCompleted(
+      paths.RANKED_BATTLE_JSON,
+      readJsonSafe,
+      job.id
+    );
   }
   res.json({ ok: true, alreadyCompleted: result.alreadyCompleted });
 });
