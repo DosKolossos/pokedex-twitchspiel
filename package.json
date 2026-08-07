@@ -1,6 +1,6 @@
 {
   "name": "pokedex-twitch-server",
-  "version": "4.3.2",
+  "version": "4.3.3",
   "private": true,
   "description": "Serverbetrieb des Pokédex-Twitchspiels mit EventSub, PM2 und OBS-Overlay",
   "main": "server/bot.js",
