@@ -115,6 +115,31 @@
     return v || "unknown";
   }
 
+  function getDexId(value) {
+    const dexId = Number(value?.dexId ?? value?.id ?? 0);
+    return Number.isFinite(dexId) && dexId > 0 ? dexId : 0;
+  }
+
+  function setGen5Sprite(img, dexId, shiny, legacyUrl) {
+    if (!img) return;
+    const variant = shiny ? "shiny/" : "";
+    const candidates = dexId ? [
+      ...(shiny ? [] : [`/sprites/front/${dexId}.gif`]),
+      `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${variant}${dexId}.gif`,
+      `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/${variant}${dexId}.png`
+    ] : [];
+    if (legacyUrl) candidates.push(legacyUrl);
+    candidates.push("/sprites/pokeball.png?ts=" + Date.now());
+
+    let index = 0;
+    img.onerror = () => {
+      index += 1;
+      if (index < candidates.length) img.src = candidates[index];
+      else img.onerror = null;
+    };
+    img.src = candidates[index];
+  }
+
   function applyRarityClass(el, rarity) {
     if (!el) return;
     const r = normRarity(rarity);
@@ -225,7 +250,7 @@
     }
 
     if (Number.isFinite(dexId) && dexId > 0) {
-      return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dexId}.png`;
+      return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${dexId}.gif`;
     }
 
     return "";
@@ -328,13 +353,11 @@
 
     // Bild nur setzen, wenn neu (verhindert Flackern)
     if (raid.bossImage) {
-      if (bossImage && raid.bossImage.dataset.src !== bossImage) {
-        raid.bossImage.onerror = () => {
-          raid.bossImage.onerror = null;
-          raid.bossImage.src = "/sprites/pokeball.png?ts=" + Date.now();
-        };
-        raid.bossImage.src = bossImage;
-        raid.bossImage.dataset.src = bossImage;
+      const bossDexId = getDexId(current?.boss || current?.pokemon);
+      const spriteKey = `${bossDexId}|${bossImage}`;
+      if ((bossDexId || bossImage) && raid.bossImage.dataset.src !== spriteKey) {
+        setGen5Sprite(raid.bossImage, bossDexId, false, bossImage);
+        raid.bossImage.dataset.src = spriteKey;
       }
       // kein hartes Leeren, damit's nicht blinkt
     }
@@ -426,15 +449,11 @@
 
         const slug = slugifyGerman(p.name || p.displayName);
         const localUrl = `/sprites/${slug}.png?ts=${Date.now()}`;
-        const url = p.spriteUrl || localUrl;
+        const dexId = getDexId(p);
 
         if (spawn.sprite) {
           spawn.sprite.classList.toggle("shiny", !!p.isShiny);
-          spawn.sprite.src = url;
-          spawn.sprite.onerror = () => {
-            spawn.sprite.onerror = null;
-            spawn.sprite.src = "/sprites/pokeball.png?ts=" + Date.now();
-          };
+          setGen5Sprite(spawn.sprite, dexId, !!p.isShiny, p.spriteUrl || localUrl);
         }
 
         setSpawnVisible(true);
