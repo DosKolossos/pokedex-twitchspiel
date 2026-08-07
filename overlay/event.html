@@ -94,7 +94,11 @@
     anchorX: 1000,
     anchorY: 452,
     targetSize: 150,
-    maxScale: 3
+    maxScale: 3,
+    // Animierte Gen-5-GIFs koennen in spaeteren Frames deutlich breiter
+    // werden als in dem Frame, den Canvas beim Laden vermisst.
+    animatedEnvelopeHalfWidth: 150,
+    identityGap: 24
   };
 
   // =========================
@@ -192,7 +196,9 @@
         const visibleLeft = imageLeft + (bounds.left * scale);
         const visibleTop = imageTop + (bounds.top * scale);
         const visibleHeightPx = visibleHeight * scale;
-        const left = Math.max(24, visibleLeft - identityWidth - 20);
+        const animationSafeLeft = SPRITE_STAGE.anchorX - SPRITE_STAGE.animatedEnvelopeHalfWidth;
+        const identityRight = Math.min(visibleLeft, animationSafeLeft) - SPRITE_STAGE.identityGap;
+        const left = Math.max(24, identityRight - identityWidth);
         const top = Math.max(24, visibleTop + (visibleHeightPx - identity.offsetHeight) / 2);
         identity.style.setProperty("--identity-left", `${left}px`);
         identity.style.setProperty("--identity-top", `${top}px`);
