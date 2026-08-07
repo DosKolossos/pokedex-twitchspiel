@@ -21,6 +21,18 @@ assert.strictEqual(queue.enqueue(file, readJson, { id:"spawn-1", type:"spawn" })
 queue.complete(file, readJson, "battle-1");
 assert.strictEqual(queue.claimHead(file, readJson, "spawn").id, "spawn-1");
 queue.complete(file, readJson, "spawn-1");
+
+const activeSpawnEvent = { id:"spawn-grace", type:"spawn", status:"active" };
+assert.strictEqual(
+  queue.spawnNeedsStart(activeSpawnEvent, { active:true, pokemon:{ name:"Traumato" }, endsAt:Date.now() - 1 }),
+  false,
+  "Ein Spawn darf im Resolve-Puffer nach endsAt nicht erneut gestartet werden"
+);
+assert.strictEqual(
+  queue.spawnNeedsStart(activeSpawnEvent, { active:false, pokemon:null, endsAt:0 }),
+  true,
+  "Ein erstmals aktivierter Spawn muss gestartet werden"
+);
 assert.strictEqual(queue.claimHead(file, readJson, "raid").id, "raid-1");
 queue.complete(file, readJson, "raid-1");
 assert.strictEqual(queue.head(file, readJson), null);

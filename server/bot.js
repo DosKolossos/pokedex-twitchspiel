@@ -227,7 +227,9 @@ function initializeGameControl() {
 }
 
 function scheduleSpawnResolve() {
-  if (spawnTimer) clearTimeout(spawnTimer);
+  // Die Queue-Pumpe läuft jede Sekunde. Ein bereits geplanter Resolve darf
+  // dabei nicht fortlaufend gelöscht und neu angelegt werden.
+  if (spawnTimer) return;
   const state = game.getSpawnState();
   if (!state?.active || !state?.pokemon) return;
   const delay = Math.max(
@@ -255,7 +257,11 @@ async function pumpOverlayQueue() {
     if (!event || event.status !== "active") return;
     if (head.type === "spawn") {
       const current = game.getSpawnState();
-      if (current?.active && Number(current.endsAt || 0) > Date.now()) {
+      // `active` bleibt bis zur tatsächlichen Auflösung gesetzt. Insbesondere
+      // im Resolve-Puffer nach endsAt darf derselbe Queue-Eintrag nicht erneut
+      // gestartet werden, sonst erhält er neue 60 Sekunden und wird nochmals
+      // im Chat angekündigt.
+      if (!overlayEventQueue.spawnNeedsStart(event, current)) {
         scheduleSpawnResolve();
         return;
       }
@@ -280,7 +286,7 @@ async function pumpOverlayQueue() {
 }
 
 function scheduleRaidResolve() {
-  if (raidTimer) clearTimeout(raidTimer);
+  if (raidTimer) return;
   const state = game.getRaidState();
   if (!state?.current) return;
   const delay = Math.max(
