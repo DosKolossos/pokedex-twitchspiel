@@ -8,6 +8,17 @@
 </head>
 <body>
   <main id="battle" class="battle" aria-live="polite">
+    <section id="battleIntro" class="battle-intro" aria-label="Kampfankündigung">
+      <div class="intro-player intro-player-left">
+        <div class="intro-heading"><strong data-intro-name>Team Blau</strong><span data-intro-elo>Elo 1000</span></div>
+        <div class="intro-team" data-intro-team></div>
+      </div>
+      <div class="intro-versus"><span>VS</span></div>
+      <div class="intro-player intro-player-right">
+        <div class="intro-team" data-intro-team></div>
+        <div class="intro-heading"><span data-intro-elo>Elo 1000</span><strong data-intro-name>Team Rot</strong></div>
+      </div>
+    </section>
     <div class="arena-glow"></div>
     <div id="trainerLeft" class="trainer-label trainer-label-left"><small>TRAINER · LINKES TEAM</small><strong>Team Blau</strong></div>
     <div id="trainerRight" class="trainer-label trainer-label-right"><small>TRAINER · RECHTES TEAM</small><strong>Team Rot</strong></div>
