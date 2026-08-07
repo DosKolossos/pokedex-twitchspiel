@@ -96,13 +96,16 @@
     // anschliessend separat links davon positioniert.
     anchorX: 925,
     anchorY: 402,
-    targetSize: 150,
+    baseTargetSize: 150,
+    minTargetSize: 96,
+    maxTargetSize: 224,
     maxScale: 3,
     // Animierte Gen-5-GIFs koennen in spaeteren Frames deutlich breiter
     // werden als in dem Frame, den Canvas beim Laden vermisst.
     animatedEnvelopeHalfWidth: 150,
     identityGap: 24
   };
+  const pokemonHeightCache = new Map();
 
   // =========================
   // HELPERS
@@ -170,7 +173,34 @@
     }
   }
 
-  function placeVisibleSprite(img, identity) {
+  function perceivedTargetSize(heightDecimetres) {
+    const metres = Number(heightDecimetres) / 10;
+    if (!Number.isFinite(metres) || metres <= 0) return SPRITE_STAGE.baseTargetSize;
+
+    // Echte 1:1-Verhaeltnisse waeren fuer das Overlay unbrauchbar (Onix: 8,8 m).
+    // Die logarithmische Skala zeigt den Unterschied deutlich, bleibt aber
+    // innerhalb der Plattform-Szene: Porenta ~121 px, Glurak ~157 px, Onix 224 px.
+    const factor = 0.72 + (0.35 * Math.log(metres + 0.5));
+    return Math.max(
+      SPRITE_STAGE.minTargetSize,
+      Math.min(SPRITE_STAGE.maxTargetSize, SPRITE_STAGE.baseTargetSize * factor)
+    );
+  }
+
+  async function getPokemonTargetSize(dexId) {
+    const id = Number(dexId || 0);
+    if (!(id > 0)) return SPRITE_STAGE.baseTargetSize;
+    if (pokemonHeightCache.has(id)) return pokemonHeightCache.get(id);
+
+    const request = fetch(`https://pokeapi.co/api/v2/pokemon/${id}`, { cache: "force-cache" })
+      .then((res) => res.ok ? res.json() : null)
+      .then((pokemon) => perceivedTargetSize(pokemon?.height))
+      .catch(() => SPRITE_STAGE.baseTargetSize);
+    pokemonHeightCache.set(id, request);
+    return request;
+  }
+
+  function placeVisibleSprite(img, identity, targetSize = SPRITE_STAGE.baseTargetSize) {
     const bounds = findVisibleBounds(img);
     if (!bounds) {
       img.classList.remove("sprite-measured");
@@ -182,7 +212,7 @@
     const visibleHeight = bounds.bottom - bounds.top + 1;
     const scale = Math.min(
       SPRITE_STAGE.maxScale,
-      SPRITE_STAGE.targetSize / Math.max(visibleWidth, visibleHeight)
+      targetSize / Math.max(visibleWidth, visibleHeight)
     );
     const visibleCenterX = (bounds.left + bounds.right + 1) / 2;
     const imageLeft = SPRITE_STAGE.anchorX - (visibleCenterX * scale);
@@ -225,7 +255,13 @@
     img.classList.remove("sprite-measured");
     if (identity) identity.classList.remove("identity-measured");
     img.crossOrigin = "anonymous";
-    img.onload = () => placeVisibleSprite(img, identity);
+    img.onload = async () => {
+      const loadedSrc = img.currentSrc || img.src;
+      const targetSize = await getPokemonTargetSize(dexId);
+      // Verhindert, dass eine spaete API-Antwort bereits den naechsten Spawn verschiebt.
+      if ((img.currentSrc || img.src) !== loadedSrc) return;
+      placeVisibleSprite(img, identity, targetSize);
+    };
     img.onerror = () => {
       index += 1;
       if (index < candidates.length) img.src = candidates[index];
