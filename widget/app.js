@@ -37,6 +37,9 @@ let pcSection = "storage";
 let historyFilter = "all";
 let multiSection = "menu";
 let rankedSelection = new Set();
+let tradeDraft = { targetId: "", offerCaughtAt: 0, wantCaughtAt: 0 };
+let tradeTarget = null;
+let tradeBusy = false;
 let openOverlay = null;
 let selectedMon = null;
 let selectedContext = null;
@@ -422,9 +425,9 @@ function renderDex() {
 
 function pcNavigation() {
   const sections = [
-    ["storage", "▦", "Lager"],
-    ["team", "👥", "Team"],
-    ["items", "🎒", "Items"]
+    ["storage", "<img src=\"/assets/storage-icon.png\" alt=\"Lager\" srcset=\"\" style=\"width: 36px; height: 36px;\">", "Lager"],
+    ["team", "<img src=\"/assets/team-icon.png\" alt=\"Team\" srcset=\"\" style=\"width: 36px; height: 36px;\">", "Team"],
+    ["items", "<img src=\"/assets/items-icon.png\" alt=\"Items\" srcset=\"\" style=\"width: 36px; height: 36px;\">", "Items"]
   ];
   return `<div class="pc-tabs" role="tablist" aria-label="PC-Bereiche">${sections.map(([id, icon, label]) =>
     `<button type="button" role="tab" data-pc-section="${id}" aria-selected="${pcSection === id}" class="${pcSection === id ? "active" : ""}"><span>${icon}</span>${label}</button>`
@@ -463,16 +466,86 @@ function renderPc() {
 
 function renderMulti() {
   if (multiSection === "ranked") return renderRankedQueue();
+  if (multiSection === "trade") return renderTrade();
   const rows = [
-    ["ranked", "⚔", "Ranked-Kampf", "3 Pokémon · Ranglistenpunkte"],
-    ["normal", "◇", "Normaler Kampf", "Direkte Herausforderung · ungewertet"],
-    ["trade", "↔", "Tausch", `${state.multiplayer?.trades?.length || 0} offene Vorgänge`],
+    ["ranked", "<img src=\"/assets/ranked-icon.png\" alt=\"Ranked\" srcset=\"\" style=\"width: 50px; height: 50px;\">", "Ranked-Kampf", "3 Pokémon · Ranglistenpunkte"],
+    ["normal", "<img src=\"/assets/battle-icon.png\" alt=\"Normaler Kampf\" srcset=\"\" style=\"width: 50px; height: 50px;\">", "Normaler Kampf", "Direkte Herausforderung · ungewertet"],
+    ["trade", "<img src=\"/assets/trade-icon.png\" alt=\"Tausch\" srcset=\"\" style=\"width: 50px; height: 50px;\">", "Tausch", `${state.multiplayer?.trades?.length || 0} offene Vorgänge`],
   ];
-  view.innerHTML = heading("Multiplayer", "Kämpfen oder tauschen") + `<div class="multi-menu">${rows.map(([id, icon, title, subtitle]) => `<button class="card multi-row" data-multi-section="${id}"><span>${icon}</span><div><strong>${title}</strong><small>${subtitle}</small></div><b>›</b></button>`).join("")}</div>`;
+  view.innerHTML = heading("Multiplayer", "Kämpfen oder tauschen") + `<div class="multi-menu">${rows.map(([id, icon, title, subtitle]) => `<button class="card multi-row" data-multi-section="${id}">${icon}<div><strong>${title}</strong><small>${subtitle}</small></div><b>›</b></button>`).join("")}</div>`;
   view.querySelectorAll("[data-multi-section]").forEach((button) => button.addEventListener("click", () => {
     if (button.dataset.multiSection === "ranked") { multiSection = "ranked"; renderMulti(); }
+    else if (button.dataset.multiSection === "trade") { multiSection = "trade"; renderMulti(); }
     else if (button.dataset.multiSection === "normal") showBattleLab();
   }));
+}
+
+function tradeMonCard(mon, role, selected) {
+  const locked = role === "offer" ? isRankedLocked(mon) : (tradeTarget?.lockedCaughtAts || []).includes(Number(mon.caughtAt));
+  return `<button type="button" class="card trade-mon ${selected ? "selected" : ""} ${locked ? "ranked-locked" : ""}" data-trade-${role}="${Number(mon.caughtAt)}" ${locked ? "disabled" : ""}>${pokemonImage(mon, "trade-sprite")}<span><strong>${escapeHtml(monName(mon))}</strong><small>Lv. ${escapeHtml(monLevel(mon))}${mon.isShiny ? " · ✨" : ""}${locked ? " · Ranked 🔒" : ""}</small></span>${selected ? "<b>✓</b>" : ""}</button>`;
+}
+
+function tradeStatusCard(entry) {
+  const incoming = String(entry?.toId) === String(state.player.id);
+  const other = incoming ? entry.fromDisplay : entry.toDisplay;
+  const give = incoming ? entry.want : entry.offer;
+  const receive = incoming ? entry.offer : entry.want;
+  return `<article class="card trade-request"><div class="trade-request-head"><strong>${incoming ? "Anfrage von" : "Anfrage an"} @${escapeHtml(other || "Trainer")}</strong><small>#${escapeHtml(entry.id)}</small></div><div class="trade-swap">${pokemonImage(give, "trade-sprite")}<span><small>Du gibst</small><b>${escapeHtml(monName(give))}</b></span><i>⇄</i>${pokemonImage(receive, "trade-sprite")}<span><small>Du bekommst</small><b>${escapeHtml(monName(receive))}</b></span></div><div class="trade-actions">${incoming ? `<button data-trade-action="accept" data-trade-id="${escapeHtml(entry.id)}">Annehmen</button><button class="danger" data-trade-action="decline" data-trade-id="${escapeHtml(entry.id)}">Ablehnen</button>` : `<button class="danger" data-trade-action="cancel" data-trade-id="${escapeHtml(entry.id)}">Abbrechen</button>`}</div></article>`;
+}
+
+function renderTrade() {
+  const players = state.multiplayer?.availablePlayers || [];
+  const trades = state.multiplayer?.trades || [];
+  const own = state.player.caught || [];
+  const targetMons = tradeTarget?.caught || [];
+  view.innerHTML = `<button class="sub-back" data-multi-back>‹ Multiplayer</button>${heading("Tausch", "Pokémon sicher direkt tauschen")}${trades.length ? `<section class="trade-section"><h2>Offene Vorgänge</h2><div class="list">${trades.map(tradeStatusCard).join("")}</div></section>` : ""}<section class="trade-section"><h2>Neuer Tausch</h2><label class="trade-label">Trainer auswählen<select data-trade-player><option value="">Bitte auswählen</option>${players.map((player) => `<option value="${escapeHtml(player.id)}" ${String(player.id) === tradeDraft.targetId ? "selected" : ""}>${escapeHtml(player.display || player.name || "Trainer")}</option>`).join("")}</select></label>${tradeDraft.targetId && !tradeTarget ? `<div class="empty">Pokémon werden geladen …</div>` : ""}${tradeTarget ? `<h3>Dein Angebot</h3><div class="trade-pokemon-grid">${own.map((mon) => tradeMonCard(mon, "offer", Number(mon.caughtAt) === tradeDraft.offerCaughtAt)).join("") || '<div class="empty">Du besitzt kein Pokémon.</div>'}</div><h3>Gewünschtes Pokémon von @${escapeHtml(tradeTarget.player?.display || "Trainer")}</h3><div class="trade-pokemon-grid">${targetMons.map((mon) => tradeMonCard(mon, "want", Number(mon.caughtAt) === tradeDraft.wantCaughtAt)).join("") || '<div class="empty">Dieser Trainer besitzt kein Pokémon.</div>'}</div><button class="queue-button" data-trade-send ${tradeDraft.offerCaughtAt && tradeDraft.wantCaughtAt && !tradeBusy ? "" : "disabled"}>${tradeBusy ? "Wird gesendet …" : "Tauschanfrage senden"}</button>` : ""}</section>`;
+  view.querySelector("[data-multi-back]")?.addEventListener("click", () => { multiSection = "menu"; renderMulti(); });
+  view.querySelector("[data-trade-player]")?.addEventListener("change", (event) => selectTradePlayer(event.target.value));
+  view.querySelectorAll("[data-trade-offer]").forEach((button) => button.addEventListener("click", () => { tradeDraft.offerCaughtAt = Number(button.dataset.tradeOffer); renderTrade(); }));
+  view.querySelectorAll("[data-trade-want]").forEach((button) => button.addEventListener("click", () => { tradeDraft.wantCaughtAt = Number(button.dataset.tradeWant); renderTrade(); }));
+  view.querySelector("[data-trade-send]")?.addEventListener("click", sendTradeRequest);
+  view.querySelectorAll("[data-trade-action]").forEach((button) => button.addEventListener("click", () => changeTrade(button.dataset.tradeAction, button.dataset.tradeId)));
+}
+
+async function selectTradePlayer(targetId) {
+  tradeDraft = { targetId:String(targetId || ""), offerCaughtAt:0, wantCaughtAt:0 };
+  tradeTarget = null;
+  renderTrade();
+  if (!tradeDraft.targetId) return;
+  const response = await fetch(`${apiBaseUrl}/api/widget/trade/player/${encodeURIComponent(tradeDraft.targetId)}${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { cache:"no-store", headers:apiHeaders() });
+  const result = await response.json();
+  if (!response.ok) { tradeDraft.targetId = ""; alert("Dieser Trainer ist nicht mehr verfügbar."); return renderTrade(); }
+  tradeTarget = result;
+  renderTrade();
+}
+
+async function tradeRequest(body) {
+  const response = await fetch(`${apiBaseUrl}/api/widget/trade${developmentUserId ? `?userId=${encodeURIComponent(developmentUserId)}` : ""}`, { method:"POST", headers:apiHeaders(true), body:JSON.stringify(body) });
+  const result = await response.json();
+  if (!response.ok) {
+    const messages = { duplicate_trade:"Diese Tauschanfrage besteht bereits.", ranked_pokemon_locked:"Eines der Pokémon ist durch die Ranked-Suche gesperrt.", target_ranked_pokemon_locked:"Das gewünschte Pokémon ist durch die Ranked-Suche gesperrt.", missing_pokemon:"Ein ausgewähltes Pokémon ist nicht mehr verfügbar.", player_not_available:"Der Trainer ist nicht mehr aktiv." };
+    throw new Error(messages[result.error] || "Der Tausch konnte nicht verarbeitet werden.");
+  }
+  return result;
+}
+
+async function sendTradeRequest() {
+  if (tradeBusy) return;
+  tradeBusy = true; renderTrade();
+  try {
+    await tradeRequest({ action:"create", targetId:tradeDraft.targetId, offerCaughtAt:tradeDraft.offerCaughtAt, wantCaughtAt:tradeDraft.wantCaughtAt });
+    tradeDraft = { targetId:"", offerCaughtAt:0, wantCaughtAt:0 }; tradeTarget = null;
+    await load(); multiSection = "trade"; renderMulti();
+  } catch (error) { alert(error.message); }
+  finally { tradeBusy = false; }
+}
+
+async function changeTrade(action, tradeId) {
+  if (tradeBusy || !confirm(action === "accept" ? "Diesen Tausch verbindlich durchführen?" : action === "decline" ? "Diese Anfrage ablehnen?" : "Diese Anfrage abbrechen?")) return;
+  tradeBusy = true;
+  try { await tradeRequest({ action, tradeId }); closeTopOverlay(); await load(); multiSection = "trade"; renderMulti(); }
+  catch (error) { alert(error.message); }
+  finally { tradeBusy = false; }
 }
 
 function renderRankedQueue() {
@@ -530,12 +603,12 @@ function renderHistory() {
   const catches = (state.player.history?.length ? state.player.history : state.player.caught || [])
     .map((mon) => ({ type: "Fang", timestamp: eventTimestamp(mon), mon }))
     .sort((a, b) => b.timestamp - a.timestamp);
+  const trades = (state.player.tradeHistory || []).map((entry) => { const own = entry.players?.find((player) => String(player.id) === String(state.player.id)); const other = entry.players?.find((player) => String(player.id) !== String(state.player.id)); return { type:"Tausch", timestamp:Number(entry.completedAt || 0), own, other }; });
   const tabs = [["all", "Alle"], ["catch", "Fänge"], ["trade", "Tausche"], ["battle", "Kämpfe"]];
-  const visibleEvents = ["all", "catch"].includes(historyFilter) ? catches : [];
+  const visibleEvents = (historyFilter === "catch" ? catches : historyFilter === "trade" ? trades : historyFilter === "all" ? [...catches, ...trades] : []).sort((a,b) => b.timestamp-a.timestamp);
 
   view.innerHTML = heading("Historie", "") + `<div class="history-tabs" role="tablist">${tabs.map(([id, label]) => `<button data-history-filter="${id}" class="${historyFilter === id ? "active" : ""}">${label}</button>`).join("")}</div>` +
-    (visibleEvents.length ? `<div class="list history-list">${visibleEvents.map((event) => `<article class="card history-row"><div class="history-ball" aria-label="Fang"></div>${pokemonImage(event.mon, "history-sprite")}<div><strong>${escapeHtml(monName(event.mon))} gefangen</strong><small>${escapeHtml(formatEventDate(event.timestamp))}</small></div><span class="event-type">Fang</span></article>`).join("")}</div>` : `<div class="empty">In diesem Bereich sind noch keine Ereignisse vorhanden.</div>`) +
-    `<p class="history-note">Abgeschlossene Tausche und Kämpfe erscheinen hier, sobald der Bot diese Ereignisse dauerhaft protokolliert.</p>`;
+    (visibleEvents.length ? `<div class="list history-list">${visibleEvents.map((event) => event.type === "Fang" ? `<article class="card history-row"><div class="history-ball" aria-label="Fang"></div>${pokemonImage(event.mon, "history-sprite")}<div><strong>${escapeHtml(monName(event.mon))} gefangen</strong><small>${escapeHtml(formatEventDate(event.timestamp))}</small></div><span class="event-type">Fang</span></article>` : `<article class="card history-row">${pokemonImage(event.own?.received, "history-sprite")}<div><strong>${escapeHtml(monName(event.own?.received))} von @${escapeHtml(event.other?.display || "Trainer")} erhalten</strong><small>${escapeHtml(monName(event.own?.gave))} abgegeben · ${escapeHtml(formatEventDate(event.timestamp))}</small></div><span class="event-type">Tausch</span></article>`).join("")}</div>` : `<div class="empty">In diesem Bereich sind noch keine Ereignisse vorhanden.</div>`);
   view.querySelectorAll("[data-history-filter]").forEach((button) => button.addEventListener("click", () => {
     historyFilter = button.dataset.historyFilter;
     renderHistory();
@@ -550,7 +623,7 @@ function notificationsMarkup() {
     if (!mon) return "";
     return `<button type="button" class="card evolution-notification" data-evolution-notification="${Number(mon.caughtAt)}">${pokemonImage(mon, "notification-sprite")}<span><strong>${escapeHtml(monName(mon))} kann sich entwickeln!</strong><small>Zu ${escapeHtml(evolution.toName)} entwickeln</small></span><b aria-hidden="true">›</b></button>`;
   }).join("");
-  const tradeCards = notifications.map(() => `<article class="card">🔄 Neue Tauschanfrage</article>`).join("");
+  const tradeCards = notifications.filter((entry) => entry.type === "trade").map(({ trade }) => { const incoming = String(trade?.toId) === String(state.player.id); return `<button type="button" class="card evolution-notification" data-trade-notification><span>🔄</span><span><strong>${incoming ? `Tauschanfrage von @${escapeHtml(trade.fromDisplay)}` : `Tauschanfrage an @${escapeHtml(trade.toDisplay)}`}</strong><small>${incoming ? "Jetzt prüfen und beantworten" : "Wartet auf Antwort"}</small></span><b aria-hidden="true">›</b></button>`; }).join("");
   return heading("Benachrichtigungen", "Entwicklungen und Anfragen") + (evolutionCards || tradeCards ? `<div class="list">${evolutionCards}${tradeCards}</div>` : `<div class="empty">Alles ruhig – keine neuen Benachrichtigungen.</div>`);
 }
 
@@ -588,6 +661,7 @@ function toggleTopOverlay(type) {
     render();
     showPokemonMenu(mon, pcSection);
   }));
+  topOverlayContent.querySelectorAll("[data-trade-notification]").forEach((button) => button.addEventListener("click", () => { closeTopOverlay(); page = "multi"; multiSection = "trade"; render(); }));
 }
 
 function render() {

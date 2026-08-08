@@ -116,14 +116,14 @@ app.get("/api/widget/player", (req, res) => {
   const caught = Array.isArray(dexUser?.caught) ? dexUser.caught : [];
   const history = Array.isArray(dexUser?.dexHistory) ? dexUser.dexHistory : [];
   const party = profile?.party || { activeSlot: 0, slots: Array(6).fill(null) };
-  const pendingTrades = Array.isArray(trades.pending)
-    ? trades.pending.filter((trade) =>
-        [trade?.fromUserId, trade?.toUserId, trade?.requesterId, trade?.targetId]
+  const pendingTrades = Object.values(trades.pending || {})
+    .filter((trade) =>
+        Number(trade?.expiresAt || 0) > Date.now() &&
+        [trade?.fromId, trade?.toId, trade?.fromUserId, trade?.toUserId, trade?.requesterId, trade?.targetId]
           .filter(Boolean)
           .map(String)
           .includes(userId)
-      )
-    : [];
+      );
 
   const dex = Object.entries(dexmap)
     .map(([name, value]) =>
@@ -168,6 +168,7 @@ app.get("/api/widget/player", (req, res) => {
       items: profile?.items || {},
       ranked: require("./lib/ranked").publicRank(profiles, userId),
       availableEvolutions,
+      tradeHistory: Array.isArray(profile?.tradeHistory) ? profile.tradeHistory : [],
     },
     dex,
     multiplayer: {
@@ -175,7 +176,7 @@ app.get("/api/widget/player", (req, res) => {
       raid: raid.current || null,
       pvpAvailable: false,
     },
-    notifications: pendingTrades.map((trade) => ({ type: "trade", trade })),
+    notifications: pendingTrades.filter((trade) => String(trade?.toId) === userId).map((trade) => ({ type: "trade", trade })),
   });
 });
 
